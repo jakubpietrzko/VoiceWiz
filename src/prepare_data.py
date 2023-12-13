@@ -3,7 +3,9 @@ import librosa
 import soundfile as sf
 import numpy as np
 from scipy import stats
-
+import torch
+import torchaudio
+import f0_utils
 class Prepare():
     def __init__(self, output_folder, audio_folder):
         self.output_folder = output_folder
@@ -48,14 +50,16 @@ class Prepare():
     def process_audio_files(self):
         for audio_file in os.listdir(self.audio_folder):
             if audio_file.endswith('.wav'):
+                print(f'Przetwarzanie pliku {audio_file}...')
                 audio_file_path = os.path.join(self.audio_folder, audio_file)
                 y, sr = librosa.load(audio_file_path, sr=None)
                 duration = len(y) / sr
 
-                if duration < 6:
+                if duration < 6 and duration > 4:
                     # Uzupełnij ciszą do 6 sekund
                     y_padded = np.pad(y, (0, int(6*sr - len(y))), 'constant')
                     output_file_path = os.path.join(self.output_folder, audio_file)
+                    print(f'Zapisywanie pliku {output_file_path}...')
                     sf.write(output_file_path, y_padded, sr)
                 elif duration > 6:
                     # Podziel na segmenty o długości 6 sekund
@@ -70,19 +74,39 @@ class Prepare():
                             # Uzupełnij ciszą do 6 sekund
                             segment_padded = np.pad(segment, (0, int(6*sr - len(segment))), 'constant')
                             sf.write(output_file_path, segment_padded, sr)         
-                                          
-audio_folder = '..\\data\\cv-corpus-15.0-delta-2023-09-08-en\\cv-corpus-15.0-delta-2023-09-08\\en\\clips\\'  
-output_folder = '..\\data\\wavs\\'
-output_folder1 = '..\\data\\parts6s\\'
-x=Prepare(output_folder, audio_folder)
-#x.convert_mp3_wav()
-x.audio_folder = output_folder
-x.output_folder = output_folder1
-#x.get_duration()
-"""Średnia długość: 6.029381085011462 sekund
-Najdłuższa długość: 153.936 sekund
-Najkrótsza długość: 0.18 sekund
-Liczba długości trwania równych 6 sekund: 0
-Liczba długości trwania krótszych niż 6 sekund: 23604
-Liczba długości trwania dłuższych niż 6 sekund: 16967"""
-x.process_audio_files()
+    def create_melspectrogram(self):
+        for file in os.listdir(self.audio_folder):                 
+            if file.endswith('.wav'):
+                audio_file = os.path.join(self.audio_folder, file)
+                y, sr = librosa.load(audio_file, sr=None)
+                mel_transform = torchaudio.transforms.MelSpectrogram(sample_rate=sr)
+                mel_spectrogram = mel_transform(torch.tensor(y))
+                length = torch.tensor([mel_spectrogram.shape[1]])
+                output_file = os.path.join(self.output_folder, os.path.splitext(file)[0] + ".pt")
+                torch.save((mel_spectrogram, length), output_file)
+    
+    def create_f0(self):
+        for file in os.listdir(self.audio_folder):                 
+            if file.endswith('.wav'):
+                audio_file = os.path.join(self.audio_folder, file)
+                lf0_tensor = f0_utils.get_lf0_from_wav(audio_file)
+                output_file = os.path.join(self.output_folder, os.path.splitext(file)[0] + ".pt")
+                torch.save(lf0_tensor, output_file)             
+if __name__ == "__main__":
+    audio_folder = '..\\data\\cv-corpus-15.0-delta-2023-09-08-en\\cv-corpus-15.0-delta-2023-09-08\\en\\clips\\'  
+    output_folder = '..\\data\\wavs\\'
+    output_folder1 = '..\\data\\parts6s\\'
+    output_folder2 = '..\\data\\fzeros\\'
+    output_folder3 = '..\\data\\mels\\'
+    x=Prepare(output_folder3, audio_folder)
+    #x.convert_mp3_wav()
+    x.audio_folder = output_folder
+    x.output_folder = output_folder1
+    #x.get_duration()
+    """Średnia długość: 6.029381085011462 sekund
+    Najdłuższa długość: 153.936 sekund
+    Najkrótsza długość: 0.18 sekund
+    Liczba długości trwania równych 6 sekund: 0
+    Liczba długości trwania krótszych niż 6 sekund: 23604
+    Liczba długości trwania dłuższych niż 6 sekund: 16967"""
+    x.process_audio_files()

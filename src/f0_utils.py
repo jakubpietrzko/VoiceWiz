@@ -58,7 +58,7 @@ def get_continious_f0(f0: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     return unvoiced, cont_lf0
 import matplotlib.pyplot as plt
 # Wywołanie funkcji get_lf0_from_wav na pliku "sample.wav"
-lf0_tensor = get_lf0_from_wav("gettysburg.wav")
+lf0_tensor = get_lf0_from_wav("..//data//parts6s//common_voice_en_38024625.wav")
 
 # Konwersja tensora PyTorch na tablicę numpy
 lf0_array = lf0_tensor.numpy()
