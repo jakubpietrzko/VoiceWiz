@@ -191,7 +191,7 @@ class VoiceConversionModel(nn.Module):
         # Stacking list of tensors into a single tensor
         dataset = torch.stack(ys).to('cuda') #trzeba bedzie sie pozbyc to cuda  przy treningu bo pozniej jest to zrobione
         return dataset
-    #na wejscie do do speaker embeddera i moze dyskryminatora
+    #na wejscie do do speaker embeddera i moze dyskryminatora (muszą byc z innych audio niz do pozostlaych)
     def prepare_data_mels(self, audio_folder):
         pass
     #na wejscie do f0
