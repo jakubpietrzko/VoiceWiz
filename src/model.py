@@ -219,7 +219,7 @@ class VoiceConversionModel(nn.Module):
                     y, _ = torchaudio.load(audio_file_path)
                     names.add(audio_file)
                     ys.append(y)
-
+        ys = torch.stack(ys)
         return ys, names
     #na wejscie do do speaker embeddera i moze dyskryminatora (muszą byc z innych audio niz do pozostlaych)
 
@@ -249,6 +249,7 @@ class VoiceConversionModel(nn.Module):
                     audio_file_path = os.path.join(audio_folder, audio_file)
                     y = torch.load(audio_file_path)
                     ys.append(y)
+        ys = torch.stack(ys)
         return ys
             
     #na wejscie do f0
@@ -260,6 +261,7 @@ class VoiceConversionModel(nn.Module):
                 audio_file_path = os.path.join(audio_folder, audio_file)
                 y = torch.load(audio_file_path)
                 ys.append(y)
+        ys = torch.stack(ys)
         return ys
     #melspektogram glosu zrodlowego do funckji straty
     def prepare_dataset_mels_x(self, audio_folder,names):
@@ -270,6 +272,7 @@ class VoiceConversionModel(nn.Module):
                 audio_file_path = os.path.join(audio_folder, audio_file)
                 y= torch.load(audio_file_path)
                 ys.append(y)
+        ys = torch.stack(ys)
         return ys
     #jesli na RAM braknie miejsca bo zwiekszymy data set trzeba bedzie tez robic wsady do ramu ale to pozniej
     def train(self, device, epochs, n_splits=5):
@@ -321,21 +324,9 @@ import itertools
 if __name__ == "__main__":
     device = torch.device('cuda')
     x=VoiceConversionModel(device)
-    asr_data,names=x.prepare_dataset_asr('..\\data\\parts6s\\', max_source_voices=10)
+    asr_data,names=x.prepare_dataset_asr('..\\data\\parts6s\\', max_source_voices=10000)
     print("po asr")
-    spk_emb=x.prepare_data_mels('..\\data\\mels\\', names, max_source_voices=10)
+    spk_emb=x.prepare_data_mels('..\\data\\mels\\', names, max_source_voices=10000)
     print("po spk_emb")
     f0=x.prepare_data_f0('..\\data\\fzeros\\', names)
     mels_x=x.prepare_dataset_mels_x('..\\data\\mels\\', names)
-    #compare spk_emb and mels_x
-    mels_x_flat = list(itertools.chain.from_iterable(mels_x))
-    spk_emb_flat = list(itertools.chain.from_iterable(spk_emb))
-
- # Konwersja na zbiory
-    mels_x_set = set(mels_x_flat)
-    spk_emb_set = set(spk_emb_flat)
-
-    # Sprawdzenie, czy przecięcie zbiorów jest niepuste
-    has_common_element = not mels_x_set.isdisjoint(spk_emb_set)
-
-    print(has_common_element)  # Wyświetli True, jeśli mają przynajmniej jeden wspólny element, False w przeciwnym razie
