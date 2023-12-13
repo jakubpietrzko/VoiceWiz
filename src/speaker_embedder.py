@@ -15,7 +15,7 @@ class ResidualBlock(nn.Module):
         return x + self.block(x)
 
 
-class SpeakerE2mbedder(nn.Module):
+class SpeakerEmbedder(nn.Module):
     def __init__(self, in_channels, num_residual_layers):
         super(SpeakerEmbedder, self).__init__()
         self.conv = nn.Conv2d(in_channels, in_channels, kernel_size=3, padding=1)

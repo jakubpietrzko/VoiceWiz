@@ -14,10 +14,10 @@ class VoiceConversionModel(nn.Module):
     def __init__(self, device):
         super(VoiceConversionModel, self).__init__()
         self.device = device
-        self.asr_encoder = ASREncoder().to(device)
+        self.asr_encoder = ASREncoder().asr_model.to(device)
         self.f0_encoder = F0Encoder().to(device)
-        self.speaker_embedder = SpeakerEmbedder(in_features=128, num_residual_layers=5).to(device)
-        self.generator = Generator().to(device)
+        self.speaker_embedder = SpeakerEmbedder(in_channels=128, num_residual_layers =5).to(device)
+        self.generator = Generator(asr_features=10,f0_features=10,speaker_features=10, generator_input_dim=10).to(device)
         self.discriminator = Discriminator().to(device)
 
             # Zamroź parametry ASR
@@ -178,28 +178,99 @@ class VoiceConversionModel(nn.Module):
 
             print(f'Strata generatora na danych walidacyjnych: {avg_gen_loss}')
             print(f'Strata dyskryminatora na danych walidacyjnych: {avg_disc_loss}')
+
+
+
+
+
+    
+
+# Przykład użycia funkcji:
+# train_files, test_files = prepare_dataset_split('ścieżka_do_folderu_z_dźwiękiem', 0.8)
+# print(f"Liczba plików treningowych: {len(train_files)}, Liczba plików testowych: {len(test_files)}")
+
+
     #musimy zrobic to tak zeby inny glos bralo na asr i f0 a inny na spekaer embedder
     #na wejscie do asr
-    def prepare_dataset_asr(self, audio_folder):
+    def prepare_dataset_asr(self, audio_folder, max_source_voices=15000, reverse = False):
+        ys = []
+        names = set()
+        cnt=0
+        xd=sorted(os.listdir(audio_folder))
+        if reverse:
+            for audio_file in reversed(xd):
+                if cnt >= max_source_voices:
+                    break
+                cnt+=1
+                if audio_file.endswith('.wav'):
+                    audio_file_path = os.path.join(audio_folder, audio_file)
+                    audio_file = audio_file[:-4]
+                    y, _ = torchaudio.load(audio_file_path)
+                    names.add(audio_file)
+                    ys.append(y)
+        else:
+            for audio_file in xd:
+                if cnt >= max_source_voices:
+                    break
+                cnt+=1
+                if audio_file.endswith('.wav'):
+                    audio_file_path = os.path.join(audio_folder, audio_file)
+                    audio_file = audio_file[:-4]
+                    y, _ = torchaudio.load(audio_file_path)
+                    names.add(audio_file)
+                    ys.append(y)
+
+        return ys, names
+    #na wejscie do do speaker embeddera i moze dyskryminatora (muszą byc z innych audio niz do pozostlaych)
+
+    def prepare_data_mels(self, audio_folder, names, max_source_voices=15000, reverse=False):
+        cnt=0
+        ys = []
+        xd=sorted(os.listdir(audio_folder))
+        if reverse:
+            print(cnt)
+            for audio_file in reversed(xd):
+                if cnt>=max_source_voices:
+                    break
+                cnt+=1
+                audio_file_without_ext = audio_file[:-4]
+                if audio_file.endswith('.pt') and audio_file_without_ext not in names:
+                    audio_file_path = os.path.join(audio_folder, audio_file)
+                    y = torch.load(audio_file_path)
+                    ys.append(y)
+        
+        else:
+            for audio_file in xd:
+                if cnt>=max_source_voices:
+                    break
+                cnt+=1
+                audio_file_without_ext = audio_file[:-4]
+                if audio_file.endswith('.pt') and audio_file_without_ext not in names:
+                    audio_file_path = os.path.join(audio_folder, audio_file)
+                    y = torch.load(audio_file_path)
+                    ys.append(y)
+        return ys
+            
+    #na wejscie do f0
+    def prepare_data_f0(self, audio_folder,names):
         ys = []
         for audio_file in os.listdir(audio_folder):
-            if audio_file.endswith('.wav'):
+            audio_file_without_ext = audio_file[:-4]
+            if audio_file.endswith('.pt') and audio_file_without_ext in names:
                 audio_file_path = os.path.join(audio_folder, audio_file)
-                y, _ = torchaudio.load(audio_file_path)
-                ys.append(y)  # Przeniesienie tensora na GPU
-
-        # Stacking list of tensors into a single tensor
-        dataset = torch.stack(ys).to('cuda') #trzeba bedzie sie pozbyc to cuda  przy treningu bo pozniej jest to zrobione
-        return dataset
-    #na wejscie do do speaker embeddera i moze dyskryminatora (muszą byc z innych audio niz do pozostlaych)
-    def prepare_data_mels(self, audio_folder):
-        pass
-    #na wejscie do f0
-    def prepare_data_f0(self, audio_folder):
-        pass
+                y = torch.load(audio_file_path)
+                ys.append(y)
+        return ys
     #melspektogram glosu zrodlowego do funckji straty
-    def prepare_dataset_mels_x(self, audio_folder):
-        pass
+    def prepare_dataset_mels_x(self, audio_folder,names):
+        ys = []
+        for audio_file in os.listdir(audio_folder):
+            audio_file_without_ext = audio_file[:-4]
+            if audio_file.endswith('.pt') and audio_file_without_ext in names:
+                audio_file_path = os.path.join(audio_folder, audio_file)
+                y= torch.load(audio_file_path)
+                ys.append(y)
+        return ys
     #jesli na RAM braknie miejsca bo zwiekszymy data set trzeba bedzie tez robic wsady do ramu ale to pozniej
     def train(self, device, epochs, n_splits=5):
         self.train()
@@ -207,10 +278,10 @@ class VoiceConversionModel(nn.Module):
         PATH_FOLDER_MELS = '..\\data\\mels\\'
         PATH_FOLDER_FZEROS = '..\\data\\fzeros\\'
         
-        dataloader = self.prepare_dataset_asr(PATH_FOLDER)
-        dataloader_mels = self.prepare_data_mels(PATH_FOLDER_MELS)
-        dataloader_fzeros = self.prepare_data_f0(PATH_FOLDER_FZEROS)
-        dataloader_mels_x = self.prepare_dataset_mels_x(PATH_FOLDER_MELS)
+        dataloader, names = self.prepare_dataset_asr(PATH_FOLDER)
+        dataloader_mels = self.prepare_data_mels(PATH_FOLDER_MELS,names)
+        dataloader_fzeros = self.prepare_data_f0(PATH_FOLDER_FZEROS,names)
+        dataloader_mels_x = self.prepare_dataset_mels_x(PATH_FOLDER_MELS,names)
         # Utworzenie obiektu KFold
         kf = KFold(n_splits=n_splits)
         
@@ -245,3 +316,26 @@ class VoiceConversionModel(nn.Module):
                 length = torch.tensor([val_x.shape[1]], device=device)
                 asr_features = self.asr_encoder.process_audio(val_x, length)
                 self.validate(device, val_mels_x, val_y, val_f0, asr_features)
+                
+import itertools              
+if __name__ == "__main__":
+    device = torch.device('cuda')
+    x=VoiceConversionModel(device)
+    asr_data,names=x.prepare_dataset_asr('..\\data\\parts6s\\', max_source_voices=10)
+    print("po asr")
+    spk_emb=x.prepare_data_mels('..\\data\\mels\\', names, max_source_voices=10)
+    print("po spk_emb")
+    f0=x.prepare_data_f0('..\\data\\fzeros\\', names)
+    mels_x=x.prepare_dataset_mels_x('..\\data\\mels\\', names)
+    #compare spk_emb and mels_x
+    mels_x_flat = list(itertools.chain.from_iterable(mels_x))
+    spk_emb_flat = list(itertools.chain.from_iterable(spk_emb))
+
+ # Konwersja na zbiory
+    mels_x_set = set(mels_x_flat)
+    spk_emb_set = set(spk_emb_flat)
+
+    # Sprawdzenie, czy przecięcie zbiorów jest niepuste
+    has_common_element = not mels_x_set.isdisjoint(spk_emb_set)
+
+    print(has_common_element)  # Wyświetli True, jeśli mają przynajmniej jeden wspólny element, False w przeciwnym razie

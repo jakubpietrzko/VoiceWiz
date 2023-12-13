@@ -17,5 +17,5 @@ class F0Encoder(nn.Module):
         x = self.norm3(torch.relu(self.conv3(x)))
         return x
     
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-f0_encoder = F0Encoder(device)
+"""device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+f0_encoder = F0Encoder(device)"""

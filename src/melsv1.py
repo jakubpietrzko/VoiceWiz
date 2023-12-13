@@ -5,7 +5,6 @@ import numpy as np
 from scipy import stats
 import torch
 import torchaudio
-import mels
 import f0_utils
 import matplotlib.pyplot as plt
 class Prepare():
@@ -76,16 +75,21 @@ class Prepare():
                             # Uzupełnij ciszą do 6 sekund
                             segment_padded = np.pad(segment, (0, int(6*sr - len(segment))), 'constant')
                             sf.write(output_file_path, segment_padded, sr)         
-    def create_melspectrogram(self):
-        for file in os.listdir(self.audio_folder):                 
+    def create_melspectrogram(audio_folder, output_folder):
+
+        for file in os.listdir(audio_folder):
             if file.endswith('.wav'):
-                audio_file = os.path.join(self.audio_folder, file)
+                audio_file = os.path.join(audio_folder, file)
                 y, sr = librosa.load(audio_file, sr=None)
-                audio_params = mels.AudioFeaturesParams()
-                audio = mels.load_and_preprocess_audio(audio_file, audio_params.sampling_rate)
-                mel_spec = mels.mel_spectrogram(audio, audio_params)
-                output_file = os.path.join(self.output_folder, os.path.splitext(file)[0] + ".pt")
-                torch.save((mel_spec), output_file)
+                mel_transform = torchaudio.transforms.MelSpectrogram(sample_rate=sr)
+                mel_spectrogram = mel_transform(torch.tensor(y))
+                output_file = os.path.join(output_folder, os.path.splitext(file)[0] + ".pt")
+                torch.save(mel_spectrogram, output_file)
+
+# Przykładowe użycie:
+# create_melspectrogram('/ścieżka/do/folderu/audio', '/ścieżka/do/folderu/melspektrogramów')
+
+
     
     def create_f0(self):
         for file in os.listdir(self.audio_folder):                 
@@ -110,22 +114,38 @@ class Prepare():
         return train_files, test_files
 
 
-def display_melspectrogram_from_pt(file_path):
-    mel_spectrogram, _ = torch.load(file_path)  # Wczytaj melspektrogram i długość z pliku .pt
-    print(mel_spectrogram.shape)
+def create_and_display_melspectrogram(audio_file_path: str):
+    """
+    Tworzy i wyświetla melspektrogram dla podanego pliku audio.
+
+    :param audio_file_path: Ścieżka do pliku audio.
+    """
+    # Wczytywanie pliku audio
+    y, sr = librosa.load(audio_file_path, sr=None)
+    
+    # Tworzenie melspektrogramu
+    mel_transform = torchaudio.transforms.MelSpectrogram(sample_rate=sr)
+    mel_spectrogram = mel_transform(torch.tensor(y))
+
+    # Wyświetlanie melspektrogramu
     plt.figure(figsize=(10, 4))
-    plt.imshow(mel_spectrogram, aspect='auto', origin='lower')
+    plt.imshow(mel_spectrogram.squeeze().numpy(), aspect='auto', origin='lower')
     plt.title('Melspectrogram')
     plt.colorbar(format='%+2.0f dB')
     plt.tight_layout()
-    plt.show()         
+    plt.show()
+
+# Przykładowe użycie:
+# display_melspectrogram_from_pt('/ścieżka/do/pliku.pt')
+
+     
 if __name__ == "__main__":
     audio_folder = '..\\data\\cv-corpus-15.0-delta-2023-09-08-en\\cv-corpus-15.0-delta-2023-09-08\\en\\clips\\'  
     output_folder = '..\\data\\wavs\\'
     output_folder1 = '..\\data\\parts6s\\'
     output_folder2 = '..\\data\\fzeros\\'
     output_folder3 = '..\\data\\mels\\'
-    x=Prepare(output_folder3, output_folder1)
+    #x=Prepare(output_folder3, output_folder1)
     #x.convert_mp3_wav()
     #x.audio_folder = output_folder
     #x.output_folder = output_folder1
@@ -136,6 +156,6 @@ if __name__ == "__main__":
     Liczba długości trwania równych 6 sekund: 0
     Liczba długości trwania krótszych niż 6 sekund: 23604
     Liczba długości trwania dłuższych niż 6 sekund: 16967"""
-    x.create_melspectrogram()
-    """ file_path='..\\data\\mels\\common_voice_en_38024637.pt'
-    display_melspectrogram_from_pt(file_path)"""
+    #x.create_melspectrogram()
+    file_path='..\\data\\mels\\common_voice_en_38024637.pt'
+    create_and_display_melspectrogram('..\\data\\mels\\common_voice_en_38024637.pt')

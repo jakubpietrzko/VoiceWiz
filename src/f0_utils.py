@@ -5,7 +5,7 @@ import numpy as np
 import librosa
 import torch
 from scipy.interpolate import interp1d
-
+import matplotlib.pyplot as plt
 
 def compute_f0_from_wav(
     wav_path: str,
@@ -56,17 +56,17 @@ def get_continious_f0(f0: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     cont_lf0 = continuous_f0.copy()
     cont_lf0[continuous_f0 > 0] = np.log(continuous_f0[continuous_f0 > 0])
     return unvoiced, cont_lf0
-import matplotlib.pyplot as plt
-# Wywołanie funkcji get_lf0_from_wav na pliku "sample.wav"
-lf0_tensor = get_lf0_from_wav("..//data//parts6s//common_voice_en_38024625.wav")
+if __name__ == "__main__":   
+    # Wywołanie funkcji get_lf0_from_wav na pliku "sample.wav"
+    lf0_tensor = get_lf0_from_wav("..//data//parts6s//common_voice_en_38024625.wav")
 
-# Konwersja tensora PyTorch na tablicę numpy
-lf0_array = lf0_tensor.numpy()
+    # Konwersja tensora PyTorch na tablicę numpy
+    lf0_array = lf0_tensor.numpy()
 
-# Tworzenie wykresu
-plt.figure(figsize=(10, 4))
-plt.plot(lf0_array[0, 0, :])  # Wybieramy tylko wartości LF0, pomijając flagi unvoiced
-plt.title("Logarytmiczna częstotliwość podstawowa (LF0)")
-plt.xlabel("Czas (ramki)")
-plt.ylabel("LF0")
-plt.show()
+    # Tworzenie wykresu
+    plt.figure(figsize=(10, 4))
+    plt.plot(lf0_array[0, 0, :])  # Wybieramy tylko wartości LF0, pomijając flagi unvoiced
+    plt.title("Logarytmiczna częstotliwość podstawowa (LF0)")
+    plt.xlabel("Czas (ramki)")
+    plt.ylabel("LF0")
+    plt.show()
