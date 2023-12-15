@@ -9,6 +9,7 @@ from generator import Generator
 from f0_utils import get_lf0_from_wav
 import numpy as np
 import os
+import pandas as pd
 from sklearn.model_selection import KFold
 class VoiceConversionModel(nn.Module):
     def __init__(self, device):
@@ -152,23 +153,26 @@ class VoiceConversionModel(nn.Module):
 
         return loss_gen, loss_disc
 
-    def validate(self, device, val_x, val_y, val_f0, asr_features):
+    def validate(self, device, val_x, val_y, val_f0, val_mels_x):
         self.eval()  # Przełącz model w tryb ewaluacji
         with torch.no_grad():  # Wyłącz obliczanie gradientów
             total_gen_loss = 0
             total_disc_loss = 0
             num_batches = 0
-            for i in range(0, len(val_x), 1000):
-                batch_x = val_x[i:i+1000].to(device)
-                batch_y = val_y[i:i+1000].to(device)
-                batch_f0 = val_f0[i:i+1000].to(device)
+            for i in range(0, len(val_x), 1024):
+                batch_x = torch.tensor(val_x[i:i+1024].values).to(device)
+                batch_y = torch.tensor(val_y[i:i+1024].values).to(device)
+                batch_f0 = torch.tensor(val_f0[i:i+1024].values).to(device)
+                batch_mels_x= torch.tensor(val_mels_x[i:i+1024].values).to(device)
 
                 for j in range(0, len(batch_x), 32):
                     mini_batch_x = batch_x[j:j+32]
                     mini_batch_y = batch_y[j:j+32]
                     mini_batch_f0 = batch_f0[j:j+32]
-
-                    gen_loss, disc_loss = self.validate_step(mini_batch_x, mini_batch_y, mini_batch_f0, asr_features)
+                    mini_batch_mels_x = batch_mels_x[j:j+32]
+                    length = torch.tensor([mini_batch_x.shape[1]], device=device)
+                    asr_features = self.asr_encoder.process_audio(mini_batch_x, length)
+                    gen_loss, disc_loss = self.validate_step(mini_batch_mels_x, mini_batch_y, mini_batch_f0, asr_features)
                     total_gen_loss += gen_loss.item()
                     total_disc_loss += disc_loss.item()
                     num_batches += 1
@@ -192,6 +196,29 @@ class VoiceConversionModel(nn.Module):
 
     #musimy zrobic to tak zeby inny glos bralo na asr i f0 a inny na spekaer embedder
     #na wejscie do asr
+    def prepare(self, audio_folder):
+        names=[]
+        data=[]
+        for filename in os.listdir(audio_folder):
+            if filename.endswith('.wav'):
+                audio_file_path = os.path.join(audio_folder, filename)
+                name = filename[:-4]
+                y, _= torchaudio.load(audio_file_path)
+            elif filename.endswith('.pt'):
+                audio_file_path = os.path.join(audio_folder, filename)
+                name = filename[:-3]
+                y = torch.load(audio_file_path)
+            data.append(y)
+            names.append(name)
+        df = pd.DataFrame({'name': names,'data': data})
+
+        # Ustaw nazwę pliku jako indeks
+        df.set_index('name', inplace=True)
+
+        return df
+    
+
+        
     def prepare_dataset_asr(self, audio_folder, max_source_voices=15000, reverse = False):
         ys = []
         names = set()
@@ -281,30 +308,41 @@ class VoiceConversionModel(nn.Module):
         PATH_FOLDER_MELS = '..\\data\\mels\\'
         PATH_FOLDER_FZEROS = '..\\data\\fzeros\\'
         
-        dataloader, names = self.prepare_dataset_asr(PATH_FOLDER)
+        dataloader= self.prepare(PATH_FOLDER)
+        dataloader_mels = self.prepare(PATH_FOLDER_MELS)
+        dataloader_fzeros = self.prepare(PATH_FOLDER_FZEROS)
+      
+        """        dataloader, names = self.prepare_dataset_asr(PATH_FOLDER)
         dataloader_mels = self.prepare_data_mels(PATH_FOLDER_MELS,names)
         dataloader_fzeros = self.prepare_data_f0(PATH_FOLDER_FZEROS,names)
-        dataloader_mels_x = self.prepare_dataset_mels_x(PATH_FOLDER_MELS,names)
+        dataloader_mels_x = self.prepare_dataset_mels_x(PATH_FOLDER_MELS,names)"""
         # Utworzenie obiektu KFold
         kf = KFold(n_splits=n_splits)
         
         for epoch in range(epochs):
             # Walidacja krzyżowa
             for train_index, val_index in kf.split(dataloader):
-                train_mels_x, val_mels_x = dataloader_mels_x[train_index], dataloader_mels_x[val_index]
+                train_labels = dataloader.index[train_index]
+                val_labels = dataloader.index[val_index]
+                train_labels_y = train_labels[::-1]
+                val_labels_y = val_labels[::-1]
+                """train_mels_x, val_mels_x = dataloader_mels_x[train_index], dataloader_mels_x[val_index]
                 train_x, val_x = dataloader[train_index], dataloader[val_index]
                 train_y, val_y = dataloader_mels[train_index], dataloader_mels[val_index]
-                train_f0, val_f0 = dataloader_fzeros[train_index], dataloader_fzeros[val_index]
-                
+                train_f0, val_f0 = dataloader_fzeros[train_index], dataloader_fzeros[val_index]"""
+                train_mels_x, val_mels_x = dataloader_mels.loc[train_labels], dataloader_mels.loc[val_labels]
+                train_x, val_x = dataloader.loc[train_labels], dataloader.loc[val_labels]
+                train_y, val_y = dataloader_mels.loc[train_labels_y], dataloader_mels.loc[val_labels_y]
+                train_f0, val_f0 = dataloader_fzeros.loc[train_labels], dataloader_fzeros.loc[val_labels]
                 # Trening na danych treningowych
-                for i in range(0, len(train_x), 1000):
-                    batch_x = train_x[i:i+1000].to(device)
-                    batch_y = train_y[i:i+1000].to(device)
-                    batch_f0 = train_f0[i:i+1000].to(device)
-
+                for i in range(0, len(train_x), 1024):
+                    batch_x = torch.tensor(train_x[i:i+1024].values).to(device)
+                    batch_y = torch.tensor(train_y[i:i+1024].values).to(device)
+                    batch_f0 = torch.tensor(train_f0[i:i+1024].values).to(device)
+                    batch_mels_x= torch.tensor(train_mels_x[i:i+1024].values).to(device)
                     # Trening
                     for j in range(0, len(batch_x), 32):
-                        mini_batch_mels_x = train_mels_x[j:j+32]
+                        mini_batch_mels_x = batch_mels_x[j:j+32]
                         mini_batch_x = batch_x[j:j+32]
                         mini_batch_y = batch_y[j:j+32]
                         mini_batch_f0 = batch_f0[j:j+32]
