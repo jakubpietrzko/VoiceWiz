@@ -6,9 +6,9 @@ class ResidualBlock(nn.Module):
     def __init__(self, in_channels):
         super(ResidualBlock, self).__init__()
         self.block = nn.Sequential(
-            nn.Conv2d(in_channels, in_channels, kernel_size=3, padding=1),
+            nn.Conv1d(in_channels, in_channels, kernel_size=3, padding=1),
             nn.ReLU(),
-            nn.Conv2d(in_channels, in_channels, kernel_size=3, padding=1)
+            nn.Conv1d(in_channels, in_channels, kernel_size=3, padding=1)
         )
 
     def forward(self, x):
@@ -18,12 +18,12 @@ class ResidualBlock(nn.Module):
 class SpeakerEmbedder(nn.Module):
     def __init__(self, in_channels, num_residual_layers):
         super(SpeakerEmbedder, self).__init__()
-        self.conv = nn.Conv2d(in_channels, in_channels, kernel_size=3, padding=1)
+        self.conv = nn.Conv1d(in_channels, in_channels, kernel_size=3, padding=1)
         self.res_blocks = nn.Sequential(
             *[ResidualBlock(in_channels) for _ in range(num_residual_layers)]
         )
-        self.mean = nn.Conv2d(in_channels, in_channels, kernel_size=3, padding=1)
-        self.log_var = nn.Conv2d(in_channels, in_channels, kernel_size=3, padding=1)
+        self.mean = nn.Conv1d(in_channels, in_channels, kernel_size=3, padding=1)
+        self.log_var = nn.Conv1d(in_channels, in_channels, kernel_size=3, padding=1)
 
     def forward(self, x):
         x = self.conv(x)

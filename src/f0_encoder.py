@@ -4,7 +4,7 @@ from torch import nn
 class F0Encoder(nn.Module):
     def __init__(self):
         super(F0Encoder, self).__init__()
-        self.conv1 = nn.Conv1d(1, 64, kernel_size=10, stride=1, padding=5)
+        self.conv1 = nn.Conv1d(2, 64, kernel_size=10, stride=1, padding=5)
         self.norm1 = nn.InstanceNorm1d(64)
         self.conv2 = nn.Conv1d(64, 64, kernel_size=10, stride=1, padding=5)
         self.norm2 = nn.InstanceNorm1d(64)

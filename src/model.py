@@ -160,10 +160,10 @@ class VoiceConversionModel(nn.Module):
             total_disc_loss = 0
             num_batches = 0
             for i in range(0, len(val_x), 1024):
-                batch_x = torch.tensor(val_x[i:i+1024].values).to(device)
-                batch_y = torch.tensor(val_y[i:i+1024].values).to(device)
-                batch_f0 = torch.tensor(val_f0[i:i+1024].values).to(device)
-                batch_mels_x= torch.tensor(val_mels_x[i:i+1024].values).to(device)
+                batch_x = torch.tensor(val_x[i:i+1024].values).to(self.device)
+                batch_y = torch.tensor(val_y[i:i+1024].values).to(self.device)
+                batch_f0 = torch.tensor(val_f0[i:i+1024].values).to(self.device)
+                batch_mels_x= torch.tensor(val_mels_x[i:i+1024].values).to(self.device)
 
                 for j in range(0, len(batch_x), 32):
                     mini_batch_x = batch_x[j:j+32]
@@ -200,16 +200,17 @@ class VoiceConversionModel(nn.Module):
         names=[]
         data=[]
         for filename in os.listdir(audio_folder):
-            if filename.endswith('.wav'):
-                audio_file_path = os.path.join(audio_folder, filename)
-                name = filename[:-4]
-                y, _= torchaudio.load(audio_file_path)
-            elif filename.endswith('.pt'):
-                audio_file_path = os.path.join(audio_folder, filename)
-                name = filename[:-3]
-                y = torch.load(audio_file_path)
-            data.append(y)
-            names.append(name)
+            if filename[:-4] in self.names_1 or filename[:-3] in self.names_1:
+                if filename.endswith('.wav'):
+                    audio_file_path = os.path.join(audio_folder, filename)
+                    name = filename[:-4]
+                    y, _= torchaudio.load(audio_file_path)
+                elif filename.endswith('.pt'):
+                    audio_file_path = os.path.join(audio_folder, filename)
+                    name = filename[:-3]
+                    y = torch.load(audio_file_path)
+                data.append(y)
+                names.append(name)
         df = pd.DataFrame({'name': names,'data': data})
 
         # Ustaw nazwę pliku jako indeks
@@ -217,7 +218,32 @@ class VoiceConversionModel(nn.Module):
 
         return df
     
+    def preparefzero(self, audio_folder):
+        names=[]
+        data=[]
+        cnt=0
+        self.names_1=set()
+        for filename in os.listdir(audio_folder):
+            if cnt>10:
+                break
+            cnt+=1
+            if filename.endswith('.wav'):
+                audio_file_path = os.path.join(audio_folder, filename)
+                name = filename[:-4]
+                y, _= torchaudio.load(audio_file_path)
+            elif filename.endswith('.pt'):
+                audio_file_path = os.path.join(audio_folder, filename)
+                name = filename[:-3]
+                self.names_1.add(name)
+                y = torch.load(audio_file_path)
+            data.append(y)
+            names.append(name)
+        df = pd.DataFrame({'name': names,'data': data})
+        
+        # Ustaw nazwę pliku jako indeks
+        df.set_index('name', inplace=True)
 
+        return df
         
     def prepare_dataset_asr(self, audio_folder, max_source_voices=15000, reverse = False):
         ys = []
@@ -302,23 +328,23 @@ class VoiceConversionModel(nn.Module):
         ys = torch.stack(ys)
         return ys
     #jesli na RAM braknie miejsca bo zwiekszymy data set trzeba bedzie tez robic wsady do ramu ale to pozniej
-    def train(self, device, epochs, n_splits=5):
-        self.train()
+    def train_model(self, epochs=5, n_splits=5):
+        self.train()  # Przełącz model w tryb treningu
         PATH_FOLDER = '..\\data\\parts6s\\'
         PATH_FOLDER_MELS = '..\\data\\mels\\'
         PATH_FOLDER_FZEROS = '..\\data\\fzeros\\'
-        
+        dataloader_fzeros = self.preparefzero(PATH_FOLDER_FZEROS)
         dataloader= self.prepare(PATH_FOLDER)
         dataloader_mels = self.prepare(PATH_FOLDER_MELS)
-        dataloader_fzeros = self.prepare(PATH_FOLDER_FZEROS)
+        
       
-        """        dataloader, names = self.prepare_dataset_asr(PATH_FOLDER)
+        """dataloader, names = self.prepare_dataset_asr(PATH_FOLDER)
         dataloader_mels = self.prepare_data_mels(PATH_FOLDER_MELS,names)
         dataloader_fzeros = self.prepare_data_f0(PATH_FOLDER_FZEROS,names)
         dataloader_mels_x = self.prepare_dataset_mels_x(PATH_FOLDER_MELS,names)"""
         # Utworzenie obiektu KFold
         kf = KFold(n_splits=n_splits)
-        
+        print("dane przygotowane")
         for epoch in range(epochs):
             # Walidacja krzyżowa
             for train_index, val_index in kf.split(dataloader):
@@ -336,17 +362,21 @@ class VoiceConversionModel(nn.Module):
                 train_f0, val_f0 = dataloader_fzeros.loc[train_labels], dataloader_fzeros.loc[val_labels]
                 # Trening na danych treningowych
                 for i in range(0, len(train_x), 1024):
-                    batch_x = torch.tensor(train_x[i:i+1024].values).to(device)
-                    batch_y = torch.tensor(train_y[i:i+1024].values).to(device)
-                    batch_f0 = torch.tensor(train_f0[i:i+1024].values).to(device)
-                    batch_mels_x= torch.tensor(train_mels_x[i:i+1024].values).to(device)
-                    # Trening
+                    #jakos przekonwertowac ramke w postaci indeksowane nazwami plikow tensory na tensor pytorch
+                    batch_x = train_x[i:i+1024].to(self.device)
+                    batch_y = train_y[i:i+1024].to(self.device)
+                    batch_f0 = train_f0[i:i+1024].to(self.device)
+                    batch_mels_x= train_mels_x[i:i+1024].to(self.device)
+                                        # Trening na danych treningowych
                     for j in range(0, len(batch_x), 32):
                         mini_batch_mels_x = batch_mels_x[j:j+32]
                         mini_batch_x = batch_x[j:j+32]
                         mini_batch_y = batch_y[j:j+32]
                         mini_batch_f0 = batch_f0[j:j+32]
 
+                        mini_batch_f0 = mini_batch_f0.unsqueeze(1)
+                        mini_batch_y = mini_batch_y.unsqueeze(1)
+                        mini_batch_mels_x = mini_batch_mels_x.unsqueeze(1)
                         length = torch.tensor([mini_batch_x.shape[1]], device=device)
                         asr_features = self.asr_encoder.process_audio(mini_batch_x, length)
 
@@ -362,9 +392,5 @@ import itertools
 if __name__ == "__main__":
     device = torch.device('cuda')
     x=VoiceConversionModel(device)
-    asr_data,names=x.prepare_dataset_asr('..\\data\\parts6s\\', max_source_voices=10000)
-    print("po asr")
-    spk_emb=x.prepare_data_mels('..\\data\\mels\\', names, max_source_voices=10000)
-    print("po spk_emb")
-    f0=x.prepare_data_f0('..\\data\\fzeros\\', names)
-    mels_x=x.prepare_dataset_mels_x('..\\data\\mels\\', names)
+    print("trening start")
+    x.train_model(epochs=2)
