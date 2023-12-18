@@ -7,6 +7,7 @@ import torch
 import torchaudio
 import mels
 import f0_utils
+import shutil
 import matplotlib.pyplot as plt
 class Prepare():
     def __init__(self, output_folder, audio_folder):
@@ -86,7 +87,17 @@ class Prepare():
                 mel_spec = mels.mel_spectrogram(audio, audio_params)
                 output_file = os.path.join(self.output_folder, os.path.splitext(file)[0] + ".pt")
                 torch.save((mel_spec), output_file)
-    
+
+    #to przenosi po porstu polowe folderu do goal, mozna wybrac tych ktorych mamy wiecej probek potem przneisc tylko
+    def split_goaset_source_set(self, new_folder):
+        files = [file for file in os.listdir(self.audio_folder) if file.endswith('.pt')]
+        half = len(files) // 2
+
+        for file in files[:half]:
+            src_file = os.path.join(self.audio_folder, file)
+            dst_file = os.path.join(new_folder, file)
+            shutil.move(src_file, dst_file)
+                
     def create_f0(self):
         for file in os.listdir(self.audio_folder):                 
             if file.endswith('.wav'):

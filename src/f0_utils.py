@@ -58,10 +58,10 @@ def get_continious_f0(f0: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     return unvoiced, cont_lf0
 if __name__ == "__main__":   
     # Wywołanie funkcji get_lf0_from_wav na pliku "sample.wav"
-    lf0_tensor = get_lf0_from_wav("..//data//parts6s//common_voice_en_38024625.wav")
-
+    #f0_tensor = get_lf0_from_wav("..//data//parts6s//common_voice_en_38024625.wav")
+    f0_tensor = torch.load("..//data//fzeros//common_voice_en_38024626.pt")
     # Konwersja tensora PyTorch na tablicę numpy
-    lf0_array = lf0_tensor.numpy()
+    lf0_array = f0_tensor.numpy()
 
     # Tworzenie wykresu
     plt.figure(figsize=(10, 4))

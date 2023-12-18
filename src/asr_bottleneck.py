@@ -8,12 +8,11 @@ class ASREncoder():
         self.asr_model = nemo_asr.models.EncDecCTCModelBPE.from_pretrained(model_name=model_name)
         self.asr_model.encoder.register_forward_hook(self.capture_encoder_output)
         self.device = torch.device('cuda')
-
+        self.asr_model = self.asr_model.eval()  # Set the model to evaluation mode
     def capture_encoder_output(self, module, input, output):
         self.encoder_output = output
 
     def process_audio(self, waveform, length):
-        self.asr_model = self.asr_model.eval()  # Set the model to evaluation mode
         with torch.no_grad():  # Disable gradient calculation
             output = self.asr_model(input_signal=waveform, input_signal_length=length)
         return output

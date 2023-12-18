@@ -1,34 +1,27 @@
-import torch
-import asr_bottleneck
-import os
 import pandas as pd
-# Wczytaj tensor z pliku
-f = '..\\data\\parts6s\\'
-def prepare(audio_folder):
-        names=[]
-        data=[]
-        for filename in os.listdir(audio_folder):
-            if filename != 'common_voice_en_38024627.wav':
-                continue
-            if filename.endswith('.wav'):
-                audio_file_path = os.path.join(audio_folder, filename)
-                name = filename[:-4]
-                y = torch.load(audio_file_path)
-            data.append(y)
-            names.append(name)
-        df = pd.DataFrame({'name': names,'data': data})
+from collections import Counter
 
-        # Ustaw nazwę pliku jako indeks
-        df.set_index('name', inplace=True)
+# Czytanie pliku tsv
+df = pd.read_csv('..\\data\\cv-corpus-15.0-delta-2023-09-08-en\\cv-corpus-15.0-delta-2023-09-08\\en\\invalidated.tsv', sep='\t')
+df = df.iloc[:, [0, 1]]  # Wybierz tylko kolumny 1 i 2
+df.columns = ['client_id', 'path']  # Przypisz nowe nazwy kolumn
+# Wczytanie pliku clip_durations.tsv
+df_durations = pd.read_csv('..\\data\\cv-corpus-15.0-delta-2023-09-08-en\\cv-corpus-15.0-delta-2023-09-08\\en\\clip_durations.tsv', sep='\t')
+df_durations.columns = ['path', 'duration']
+df = pd.merge(df, df_durations, on='path')
+# Funkcja do znalezienia 100 najczęściej występujących client_id
+def find_top_client_ids(df):
+    counter = Counter(df['client_id'])
+    return counter.most_common(10)
+def find_top_durations(df):
+    return df.groupby('client_id')['duration'].sum().nlargest(100)
 
-        return df
-df=prepare(f)
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-xd=df.loc['common_voice_en_38024627']
-oop = xd[0].to(device) if isinstance(xd[0], torch.Tensor) else torch.tensor(xd[0].values).to(device)
-asr_encoder=asr_bottleneck.ASREncoder()
+# Użycie funk
+# Funkcja do znalezienia wszystkich ścieżek dla danego zestawu client_id
+def find_paths(df, client_ids):
+    return df[df['client_id'].isin(client_ids)]['path']
 
-length = torch.tensor(oop, device=device)
-asr_features = asr_encoder.process_audio(oop, length)
-# Wyświetl wymiary tensora
-print(asr_features.shape)
+# Użycie funkcji
+top_durations = find_top_durations(df)
+
+print(top_durations)
