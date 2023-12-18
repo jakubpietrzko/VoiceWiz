@@ -36,9 +36,12 @@ class Generator(nn.Module):
 
     def forward(self, asr_data, f0_data, speaker_data):
         # Dostosowanie wymiarów danych
+        for tensor in asr_data:
+            print(tensor.shape)
+        asr_data = torch.cat(asr_data, dim=0)  # Połączenie tensorów wzdłuż wymiaru 0
         asr_data = self.conv_asr(asr_data)
-        f0_data = self.conv_f0(f0_data.unsqueeze(1))
-        speaker_data = self.conv_speaker(speaker_data.unsqueeze(1))
+        f0_data = self.conv_f0(f0_data)
+        speaker_data = self.conv_speaker(speaker_data)
         # Sumowanie danych
         x = asr_data + f0_data + speaker_data
         return self.generator(x, speaker_data)  # przekazanie osadzenia mówcy do generatora
