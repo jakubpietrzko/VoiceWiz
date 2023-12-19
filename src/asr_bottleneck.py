@@ -17,7 +17,7 @@ class ASREncoder():
         with torch.no_grad():# Disable gradient calculation
             #waveform = waveform.squeeze(1)# Remove dimension with channel
             output = self.asr_model(input_signal=waveform, input_signal_length=length)
-        return output
+        return output[0]
 def prepare_dataset(audio_folder,i):
         ys = []
         for audio_file in os.listdir(audio_folder):
@@ -51,9 +51,11 @@ if __name__ == "__main__":
         waveform = waveform  # Dodanie wymiaru batch
         length = torch.tensor([waveform.shape[1]], device='cuda')
         output = asr_encoder.process_audio(waveform, length)
+        print("Wymiar wyjścia ASR:", output[0].shape)
+        print(output)
         outputs.append(output[0])  # Zapisz tylko tensor wyjściowy
 
-    torch.save(outputs, "outputs.pt")
+    #torch.save(outputs, "outputs.pt")
     end_time = time.time()
     
     print(f"Czas obliczeń na GPU: {end_time - start_time} sekund")

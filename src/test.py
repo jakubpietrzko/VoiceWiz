@@ -1,4 +1,4 @@
-import pandas as pd
+"""import pandas as pd
 from collections import Counter
 
 # Czytanie pliku tsv
@@ -24,4 +24,13 @@ def find_paths(df, client_ids):
 # Użycie funkcji
 top_durations = find_top_durations(df)
 
-print(top_durations)
+print(top_durations)"""
+import torch
+
+# Wczytaj tensor
+f0_tensor = torch.load('..\\data\\fzeros\\common_voice_en_38024626.pt')
+
+# Sprawdź długość sekwencji
+sequence_length = f0_tensor.shape# Zakładamy, że długość sekwencji jest drugim wymiarem
+
+print(f"Długość sekwencji: {sequence_length}")

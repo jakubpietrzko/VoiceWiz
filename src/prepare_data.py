@@ -120,16 +120,16 @@ class Prepare():
 
         return train_files, test_files
 
-
 def display_melspectrogram_from_pt(file_path):
-    mel_spectrogram, _ = torch.load(file_path)  # Wczytaj melspektrogram i długość z pliku .pt
+    mel_spectrogram = torch.load(file_path)  # Wczytaj melspektrogram i długość z pliku .pt
+    mel_spectrogram = mel_spectrogram.squeeze(0)  # Usuń wymiary o rozmiarze 1
     print(mel_spectrogram.shape)
     plt.figure(figsize=(10, 4))
     plt.imshow(mel_spectrogram, aspect='auto', origin='lower')
     plt.title('Melspectrogram')
     plt.colorbar(format='%+2.0f dB')
     plt.tight_layout()
-    plt.show()         
+    plt.show()        
 if __name__ == "__main__":
     audio_folder = '..\\data\\cv-corpus-15.0-delta-2023-09-08-en\\cv-corpus-15.0-delta-2023-09-08\\en\\clips\\'  
     output_folder = '..\\data\\wavs\\'
@@ -147,6 +147,6 @@ if __name__ == "__main__":
     Liczba długości trwania równych 6 sekund: 0
     Liczba długości trwania krótszych niż 6 sekund: 23604
     Liczba długości trwania dłuższych niż 6 sekund: 16967"""
-    x.create_melspectrogram()
-    """ file_path='..\\data\\mels\\common_voice_en_38024637.pt'
-    display_melspectrogram_from_pt(file_path)"""
+    #x.create_melspectrogram()
+    file_path='..\\data\\mels\\common_voice_en_38024637.pt'
+    display_melspectrogram_from_pt(file_path)

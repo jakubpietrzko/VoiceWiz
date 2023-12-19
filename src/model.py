@@ -6,7 +6,7 @@ from asr_bottleneck import ASREncoder
 from f0_encoder import F0Encoder
 from speaker_embedder import SpeakerEmbedder
 from discriminator import Discriminator
-from generator import Generator
+from genz import Generator
 from f0_utils import get_lf0_from_wav
 import numpy as np
 import os
@@ -18,9 +18,9 @@ class VoiceConversionModel(nn.Module):
         self.device = device
         self.asr_encoder = ASREncoder()
         self.asr_encoder.asr_model = self.asr_encoder.asr_model.to(device)
-        self.f0_encoder = F0Encoder(in_channels=1).to(device)
+        self.f0_encoder = F0Encoder(in_channels=2).to(device)
         self.speaker_embedder = SpeakerEmbedder(in_channels=1, num_residual_layers =5).to(device)
-        self.generator = Generator(asr_features=1, f0_features=1, speaker_features=1, generator_input_dim=1).to(device)
+        self.generator = Generator(asr_dim=301, f0_dim=301, speaker_dim=600, output_dim=600).to(device)
         self.discriminator = Discriminator().to(device)
 
             # Zamroź parametry ASR
