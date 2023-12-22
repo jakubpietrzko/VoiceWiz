@@ -1,35 +1,52 @@
+
 import torch
 from torch import nn
 
-
 class ResidualBlock(nn.Module):
-    def __init__(self, in_channels):
+    def __init__(self, channels, dilation):
         super(ResidualBlock, self).__init__()
-        self.block = nn.Sequential(
-            nn.Conv2d(in_channels, in_channels, kernel_size=3, padding=1),
-            nn.ReLU(),
-            nn.Conv2d(in_channels, in_channels, kernel_size=3, padding=1)
-        )
+        self.dilated_conv = nn.Conv1d(channels, channels, kernel_size=3, padding=dilation, dilation=dilation)
+        self.activation = nn.LeakyReLU(0.2)
+        self.skip_connection = nn.Conv1d(channels, channels, kernel_size=1)
 
     def forward(self, x):
-        return x + self.block(x)
-
+        residual = self.dilated_conv(x)
+        residual = self.activation(residual)
+        return self.skip_connection(x) + residual
 
 class SpeakerEmbedder(nn.Module):
-    def __init__(self, in_channels, num_residual_layers):
+    def __init__(self, in_channels, out_channels, num_blocks=5):
         super(SpeakerEmbedder, self).__init__()
-        self.conv = nn.Conv2d(in_channels, in_channels, kernel_size=3, padding=1)
-        self.res_blocks = nn.Sequential(
-            *[ResidualBlock(in_channels) for _ in range(num_residual_layers)]
-        )
-        self.mean = nn.Conv2d(in_channels, in_channels, kernel_size=3, padding=1)
-        self.log_var = nn.Conv2d(in_channels, in_channels, kernel_size=3, padding=1)
+        self.initial_conv = nn.Conv1d(in_channels, out_channels, kernel_size=1)
+        self.res_blocks = nn.ModuleList([ResidualBlock(out_channels, 2 ** i) for i in range(num_blocks)])
+        self.avg_pooling = nn.AdaptiveAvgPool1d(1)
+        self.mean_layer = nn.Linear(out_channels, out_channels)
+        self.log_var_layer = nn.Linear(out_channels, out_channels)
 
     def forward(self, x):
-        x = self.conv(x)
-        x = self.res_blocks(x)
-        mean = self.mean(x)
-        log_var = self.log_var(x)
-        std = torch.exp(0.5 * log_var)
-        eps = torch.randn_like(std)
-        return mean + eps * std
+        x = self.initial_conv(x)
+        for block in self.res_blocks:
+            x = block(x)
+        x = self.avg_pooling(x).squeeze(-1)
+        mean = self.mean_layer(x)
+        log_var = self.log_var_layer(x)
+        if self.training:
+            std = torch.exp(0.5 * log_var)
+            eps = torch.randn_like(std)
+            return mean + eps * std, log_var
+        else:
+            return mean, log_var
+    
+if __name__=="__main__": 
+    # Parametry
+    in_channels = 80  # Przykładowa liczba kanałów wejściowych (np. dla spektrogramów mel)
+    out_channels = 80  # Przykładowa liczba kanałów wyjściowych
+    # Utworzenie instancji modelu
+    speaker_embedder = SpeakerEmbedder(in_channels, out_channels)
+    # Testowanie modelu
+    test_input = torch.load('..\\data\\mels\\common_voice_en_38024627.pt')  # Przykładowy tensor wejściowy
+    mean, log_var = speaker_embedder(test_input)
+    print(mean.shape)
+    print(mean)
+    print(log_var)
+    print(log_var.shape)

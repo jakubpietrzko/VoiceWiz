@@ -28,7 +28,7 @@ print(top_durations)"""
 import torch
 
 # Wczytaj tensor
-f0_tensor = torch.load('..\\data\\fzeros\\common_voice_en_38024626.pt')
+f0_tensor = torch.load('..\\data\\mels\\common_voice_en_38024627.pt')
 
 # Sprawdź długość sekwencji
 sequence_length = f0_tensor.shape# Zakładamy, że długość sekwencji jest drugim wymiarem
