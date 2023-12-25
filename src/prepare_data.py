@@ -4,9 +4,11 @@ import soundfile as sf
 import numpy as np
 from scipy import stats
 import torch
+import concurrent.futures
 import torchaudio
 import mels
 import f0_utils
+import random
 import shutil
 import matplotlib.pyplot as plt
 class Prepare():
@@ -98,14 +100,25 @@ class Prepare():
             dst_file = os.path.join(new_folder, file)
             shutil.move(src_file, dst_file)
                 
-    def create_f0(self):
+    """def create_f0(self):
         for file in os.listdir(self.audio_folder):                 
             if file.endswith('.wav'):
                 audio_file = os.path.join(self.audio_folder, file)
                 lf0_tensor = f0_utils.get_lf0_from_wav(audio_file)
                 output_file = os.path.join(self.output_folder, os.path.splitext(file)[0] + ".pt")
-                torch.save(lf0_tensor, output_file)    
-                
+                torch.save(lf0_tensor, output_file)  """  
+    
+    def create_f0(self):
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            for file in os.listdir(self.audio_folder):                 
+                if file.endswith('.wav'):
+                    executor.submit(self.process_file, file)
+
+    def process_file(self, file):
+        audio_file = os.path.join(self.audio_folder, file)
+        lf0_tensor = f0_utils.get_lf0_from_wav(audio_file)
+        output_file = os.path.join(self.output_folder, os.path.splitext(file)[0] + ".pt")
+        torch.save(lf0_tensor, output_file)            
     def prepare_dataset_split(audio_folder: str, split_ratio: float = 0.8):
 
         all_files = [os.path.join(audio_folder, f) for f in os.listdir(audio_folder) if f.endswith('.wav')]
@@ -134,13 +147,14 @@ if __name__ == "__main__":
     audio_folder = '..\\data\\cv-corpus-15.0-delta-2023-09-08-en\\cv-corpus-15.0-delta-2023-09-08\\en\\clips\\'  
     output_folder = '..\\data\\wavs\\'
     output_folder1 = '..\\data\\parts6s\\'
-    output_folder2 = '..\\data\\fzeros\\'
+    output_folder2 = '..\\data\\f0\\'
     output_folder3 = '..\\data\\mels\\'
-    x=Prepare(output_folder3, output_folder1)
+    x=Prepare(output_folder2, output_folder1)
     #x.convert_mp3_wav()
     #x.audio_folder = output_folder
     #x.output_folder = output_folder1
     #x.get_duration()
+    x.create_f0()
     """Średnia długość: 6.029381085011462 sekund
     Najdłuższa długość: 153.936 sekund
     Najkrótsza długość: 0.18 sekund
@@ -148,5 +162,4 @@ if __name__ == "__main__":
     Liczba długości trwania krótszych niż 6 sekund: 23604
     Liczba długości trwania dłuższych niż 6 sekund: 16967"""
     #x.create_melspectrogram()
-    file_path='..\\data\\mels\\common_voice_en_38024637.pt'
-    display_melspectrogram_from_pt(file_path)
+    

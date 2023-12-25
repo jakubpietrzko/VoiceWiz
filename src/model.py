@@ -10,6 +10,7 @@ from genz import Generator
 from f0_utils import get_lf0_from_wav
 import numpy as np
 import os
+import time
 import pandas as pd
 from sklearn.model_selection import KFold
 class VoiceConversionModel(nn.Module):
@@ -146,7 +147,6 @@ class VoiceConversionModel(nn.Module):
         ys = {}
         mels ={}
         fzeros={}
-        
         #poki fzero jest male zeby liczylo szybciej
         names= set()
         for filename in os.listdir(fzeros_folder):  
@@ -154,6 +154,7 @@ class VoiceConversionModel(nn.Module):
                 audio_file_path = os.path.join(fzeros_folder, filename)
                 name = filename[:-3]
                 y = torch.load(audio_file_path).float()
+                print(y.shape)
                 fzeros[name] = y
                 names.add(name)
         cnt=0
@@ -202,11 +203,15 @@ class VoiceConversionModel(nn.Module):
                 name = filename[:-3]
                 y = torch.load(audio_file_path)
                 data.append(y)
+                
         random.shuffle(data)  #przy any to one mozna usunac
+        
         data = torch.stack(data)
+        
         return data.float()
                  
     #jesli na RAM braknie miejsca bo zwiekszymy data set trzeba bedzie tez robic wsady do ramu ale to pozniej
+    #mozna dodac np early stopping
     def train_model(self, epochs=5):
         self.train() 
         
@@ -243,26 +248,20 @@ class VoiceConversionModel(nn.Module):
                 batch_goal =batch_goal.to(self.device)
                 # Trening na danych treningowych
                 size_of_mini_batch = 2
-                
+                x=time.time()
                 for j in range(0, len(batch_x), size_of_mini_batch):
                     mini_batch_x = batch_x[j:j+size_of_mini_batch]
                     mini_batch_y = batch_y[j:j+size_of_mini_batch]
                     mini_batch_f0 = batch_f0[j:j+size_of_mini_batch]
                     mini_batch_goal = batch_goal[j:j+size_of_mini_batch]
-                    t = torch.cuda.get_device_properties(0).total_memory
-                    r = torch.cuda.memory_reserved(0) 
-                    a = torch.cuda.memory_allocated(0)
-                    f = t-a  # free inside reserved
-                    print(f"Total memory: {t/1024**3}")
-                    print(f"Reserved memory: {r/1024**3}")
-                    print(f"Allocated memory: {a/1024**3}")
-                    print(f"Free inside reserved: {f/1024**3}")
                     length = torch.full((mini_batch_x.shape[0],), mini_batch_x.shape[1], device=self.device)  # Utwórz tensor z długościami
                     asr_features = self.asr_encoder.process_audio(mini_batch_x, length)
                     print(asr_features.shape)
                     loss ,dys = self.train_step(mini_batch_x, mini_batch_y, mini_batch_f0, asr_features,mini_batch_goal)
                     running_loss += loss
                     print(f'Epoka: {epoch+1}, krok: {i+j+1}, strata: {loss, dys }')
+                    a = time.time()
+                    print(a-x)
                     torch.cuda.empty_cache()
             # Obliczanie średniej straty dla epoki
             avg_loss = running_loss / len(dataloader)
