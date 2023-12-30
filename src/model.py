@@ -82,12 +82,12 @@ class VoiceConversionModel(nn.Module):
         print(f"Reserved memory: {r/1024**3}")
         print(f"Allocated memory: {a/1024**3}")
         print(f"Free inside reserved: {f/1024**3}")    """    
-        # Przejdź do przodu przez generator
+        #Przejdź do przodu przez generator
         gen_output = self.generator(asr_features, f0_features, speaker_embedding)
-        # Utwórz transformację MelSpectrogram
+        #Utwórz transformację MelSpectrogram
         mel_transform = torchaudio.transforms.MelSpectrogram(sample_rate=22050, n_fft=400, hop_length=256, n_mels=80).to(self.device)
         #print(gen_output.shape)
-        # Przekształć surowy dźwięk na melspektrogram
+        #Przekształć surowy dźwięk na melspektrogram
         gen_output_mel_b = mel_transform(gen_output)
         # Przejdź do przodu przez discriminator z prawdziwą próbką
         #print("rozmiary na wej dyskr org", y.shape)
@@ -100,18 +100,18 @@ class VoiceConversionModel(nn.Module):
 
         disc_output_real = disc_output_real[-1]
         disc_output_fake = disc_output_fake[-1]
-        # Oblicz stratę dyskryminatora dla prawdziwej i wygenerowanej próbki
-        # Oblicz stratę dyskryminatora dla prawdziwej i wygenerowanej próbki
-        # Oblicz stratę dyskryminatora dla prawdziwej i wygenerowanej próbki
+        #Oblicz stratę dyskryminatora dla prawdziwej i wygenerowanej próbki
+        #Oblicz stratę dyskryminatora dla prawdziwej i wygenerowanej próbki
+        #Oblicz stratę dyskryminatora dla prawdziwej i wygenerowanej próbki
         loss_disc = self.LAdvD(disc_output_fake,disc_output_real)
 
         #obliczstrate rekonstrukcji
         loss_rec= self.LRec(y, gen_output_mel)
-        # oblicz loss_adv_p
+        #oblicz loss_adv_p
         loss_adv_p = self.LAdvP(disc_output_fake)
-        # oblicz loss_spk
+        #oblicz loss_spk
         loss_spk = self.LSpk(log_var)
-        # Oblicz stratę generatora, f0_encoder i speaker_embedder
+        #Oblicz stratę generatora, f0_encoder i speaker_embedder
         loss_gen = 45 * loss_rec + loss_adv_p + loss_fm + 0.01 * loss_spk
 
         # Wyzeruj wszystkie gradienty

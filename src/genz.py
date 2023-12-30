@@ -7,6 +7,7 @@ class Generator(nn.Module):
     def __init__(self, asr_dim, f0_dim, speaker_dim, output_dim):
         super(Generator, self).__init__()
         self.vocoder = UnivNetModel.from_pretrained(model_name="tts_en_libritts_univnet")
+        
         for param in self.vocoder.parameters():
             param.requires_grad = False
 
