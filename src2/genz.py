@@ -74,8 +74,16 @@ class Generator(nn.Module):
         self.deconv4 = nn.ConvTranspose2d(16, 8, kernel_size=(5, 5), stride=(1, 1), padding=(2, 2))
         self.deconv5 = nn.ConvTranspose2d(8, 4, kernel_size=(5, 5), stride=(2, 2), padding=(2, 2), output_padding=(1, 1))
         
-        self.deconv6 = nn.ConvTranspose2d(4, 2, kernel_size=(5, 5), stride=(2, 2), padding=(2, 2), output_padding=(1, 1))
-        self.deconv7 = nn.ConvTranspose2d(2, 1, kernel_size=(5, 5), stride=(1, 1), padding=(2, 2))
+        self.deconv6 = nn.ConvTranspose2d(4, 4, kernel_size=(5, 5), stride=(2, 2), padding=(2, 2), output_padding=(1, 1))
+        self.deconv7 = nn.ConvTranspose2d(4, 3, kernel_size=(5, 5), stride=(1, 1), padding=(2, 2))
+        self.conv7 = nn.Conv2d(3, 6, kernel_size=(5, 5), stride=(1, 1), padding=(2, 2))
+        self.conv8 = nn.Conv2d(6, 12, kernel_size=(5, 5), stride=(1, 1), padding=(2, 2))
+        self.conv9 = nn.Conv2d(12, 24, kernel_size=(5, 5), stride=(1, 1), padding=(2, 2))
+        self.conv10 = nn.Conv2d(24, 12, kernel_size=(5, 5), stride=(1, 1), padding=(2, 2))
+        self.conv11 = nn.Conv2d(12, 6, kernel_size=(5, 5), stride=(1, 1), padding=(2, 2))
+        self.conv12 = nn.Conv2d(6, 3, kernel_size=(5, 5), stride=(1, 1), padding=(2, 2))
+        self.conv13 = nn.Conv2d(3, 1, kernel_size=(5, 5), stride=(1, 1), padding=(2, 2))
+        
         
         # Oryginalny vokoder
         self.vocoder = HIFIGAN.from_hparams(source="speechbrain/tts-hifigan-libritts-16kHz", savedir="vocoder_16khz", run_opts={"device": "cuda"})
@@ -84,7 +92,7 @@ class Generator(nn.Module):
         
         for param in self.vocoder.parameters():
             param.requires_grad = False
-
+  
     def forward(self, x, speaker_embedding):
         # Osadzanie mówcy
         #print(speaker_embedding.shape)
@@ -142,8 +150,17 @@ class Generator(nn.Module):
         x= F.leaky_relu(self.deconv5(x))
         
         x = F.leaky_relu(self.deconv6(x))
+        x= F.leaky_relu(self.deconv7(x))
+        x=x+xs
+        x = F.leaky_relu(self.conv7(x))
+        x = F.leaky_relu(self.conv8(x))
+        x = F.leaky_relu(self.conv9(x))
+        x = F.leaky_relu(self.conv10(x))
+        x = F.leaky_relu(self.conv11(x))
+        x = F.leaky_relu(self.conv12(x))
         
-        modified_mel = torch.tanh(self.deconv7(x))
+        
+        modified_mel = torch.tanh(self.conv13(x))
         modified_mel = (modified_mel  + x_mean)*x_std
         modified_mel = modified_mel.squeeze(1)
         

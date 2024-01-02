@@ -1,14 +1,19 @@
-from model import VoiceConversionModel
 import torch
-if __name__ == "__main__":
-    device = torch.device('cuda')
-    x=VoiceConversionModel(device)
-    x.eval()
-    PATH_FOLDER = '..\\data\\parts6s\\'
-    PATH_FOLDER_MELS = '..\\data\\mels\\'
-    PATH_FOLDER_FZEROS = '..\\data\\fzeros\\'
-    x.load_state_dict(torch.load('model.pth', map_location=device))
+import matplotlib.pyplot as plt
 
-    x(y,f0,asr)
+def display_melspectrogram_from_pt(pt_file_path):
+    # Ładowanie melspektrogramu
+    mel_spectrogram = torch.load(pt_file_path)
 
+    # Wyświetlanie melspektrogramu
+    plt.figure(figsize=(10, 4))
+    plt.imshow(mel_spectrogram.detach().squeeze().numpy(), aspect='auto', origin='lower')
+    plt.title('Melspectrogram')
+    plt.colorbar(format='%+2.0f dB')
+    plt.tight_layout()
+    plt.show()
+
+
+# Przykładowe użycie:
+display_melspectrogram_from_pt('..//data//results//source.pt')
 

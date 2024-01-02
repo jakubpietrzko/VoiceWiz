@@ -37,7 +37,7 @@ class VoiceConversionModel(nn.Module):
         for param in self.predictor.parameters():
             param.requires_grad = False
         self.optimizer_speaker = torch.optim.Adam(self.speaker_embedder.parameters(), lr=0.001)
-        self.optimizer_gen = torch.optim.Adam(self.generator.parameters(), lr=0.01)
+        self.optimizer_gen = torch.optim.Adam(self.generator.parameters(), lr=0.001)
         self.optimizer_disc = torch.optim.Adam(self.discriminator.parameters(), lr=0.001)
         
     def forward(self, y):
@@ -142,13 +142,13 @@ class VoiceConversionModel(nn.Module):
         #Przejdź do przodu przez generator
         gen_output, gen_output_mel = self.generator(y,speaker_embedding)
         #Utwórz transformację MelSpectrogram
-        if cnt%200==0:
+        if cnt%200==0 or cnt == 10:
             # Zapisz tylko pierwszą próbkę z gen_output_mel
             torchaudio.save('..//data//results//generated.wav', gen_output[0].cpu().squeeze(1), 16000, format="WAV")
-            
+            torch.save(y[0].cpu(), '..//data//results//source.pt')
             # Zapisz tylko pierwszą próbkę z y
             torchaudio.save('..//data//results//source.wav', x[0].cpu().squeeze(1), 16000, format="WAV")
-            
+            torch.save(gen_output_mel[0].cpu(), '..//data//results//gen_output_mel.pt')
             goal_wav = self.generator.vocoder.decode_batch(goal[0])
             
             # Zapisz tylko pierwszą próbkę z goal.wav
