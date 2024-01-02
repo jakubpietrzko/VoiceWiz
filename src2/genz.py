@@ -39,9 +39,9 @@ class Generator(nn.Module):
             nn.Conv2d(32, 32, kernel_size=5, stride=2, padding=2),
         )
         self.fc_speaker5 = nn.Sequential(
-            nn.Conv2d(speaker_embedding_dim, 32, kernel_size=5 , stride=1, padding=2),
+            nn.Conv2d(speaker_embedding_dim, 16, kernel_size=5 , stride=1, padding=2),
             nn.LeakyReLU(),
-            nn.Conv2d(32, 32, kernel_size=5, stride=1, padding=2),
+            nn.Conv2d(16, 4, kernel_size=5, stride=1, padding=2),
         )
         self.fc_speaker3 = nn.Sequential(
             nn.Conv2d(speaker_embedding_dim, 64, kernel_size=5, stride=2, padding=2),
@@ -75,6 +75,7 @@ class Generator(nn.Module):
         self.deconv5 = nn.ConvTranspose2d(8, 4, kernel_size=(5, 5), stride=(2, 2), padding=(2, 2), output_padding=(1, 1))
         
         self.deconv6 = nn.ConvTranspose2d(4, 4, kernel_size=(5, 5), stride=(2, 2), padding=(2, 2), output_padding=(1, 1))
+        
         self.deconv7 = nn.ConvTranspose2d(4, 3, kernel_size=(5, 5), stride=(1, 1), padding=(2, 2))
         self.conv7 = nn.Conv2d(3, 6, kernel_size=(5, 5), stride=(1, 1), padding=(2, 2))
         self.conv8 = nn.Conv2d(6, 12, kernel_size=(5, 5), stride=(1, 1), padding=(2, 2))
@@ -148,8 +149,9 @@ class Generator(nn.Module):
         x = self.unpool(x,ind)
         
         x= F.leaky_relu(self.deconv5(x))
-        
+        x=x+speaker_embedding5
         x = F.leaky_relu(self.deconv6(x))
+        
         x= F.leaky_relu(self.deconv7(x))
         x=x+xs
         x = F.leaky_relu(self.conv7(x))
@@ -161,7 +163,7 @@ class Generator(nn.Module):
         
         
         modified_mel = torch.tanh(self.conv13(x))
-        modified_mel = (modified_mel  + x_mean)*x_std
+        modified_mel = modified_mel*x_std  + x_mean
         modified_mel = modified_mel.squeeze(1)
         
         # Konwersja na audio przy użyciu oryginalnego vokodera

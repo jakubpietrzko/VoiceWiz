@@ -15,5 +15,5 @@ def display_melspectrogram_from_pt(pt_file_path):
 
 
 # Przykładowe użycie:
-display_melspectrogram_from_pt('..//data//results//source.pt')
+display_melspectrogram_from_pt('..//data//results//gen_output_mel.pt')
 
