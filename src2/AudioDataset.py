@@ -6,7 +6,7 @@ import torchaudio
 class AudioDatasetRAW(Dataset):
     def __init__(self, directory):
         self.directory = directory
-        self.audio_files = [os.path.join(directory, f) for f in os.listdir(directory) if f.endswith('.wav')][:5000]
+        self.audio_files = [os.path.join(directory, f) for f in os.listdir(directory) if f.endswith('.wav')]
 
     def __len__(self):
         return len(self.audio_files)
@@ -18,7 +18,7 @@ class AudioDatasetRAW(Dataset):
 class AudioDatasetMEL(Dataset):
     def __init__(self, directory):
         self.directory = directory
-        self.spectrogram_files = [os.path.join(directory, f) for f in os.listdir(directory) if f.endswith('.pt')][:5000]
+        self.spectrogram_files = [os.path.join(directory, f) for f in os.listdir(directory) if f.endswith('.pt')]
     def __len__(self):
         return len(self.spectrogram_files)
 

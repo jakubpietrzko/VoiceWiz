@@ -5,9 +5,15 @@ import torchaudio
 class ResidualBlock(nn.Module):
     def __init__(self, channels, dilation):
         super(ResidualBlock, self).__init__()
-        self.dilated_conv = nn.Conv2d(channels, channels, kernel_size=3, padding=dilation, dilation=dilation)
+        self.dilated_conv = nn.Sequential(
+            nn.Conv2d(channels, channels, kernel_size=3, padding=dilation, dilation=dilation),
+            nn.BatchNorm2d(channels)
+        )
         self.activation = nn.LeakyReLU(0.2)
-        self.skip_connection = nn.Conv2d(channels, channels, kernel_size=1)
+        self.skip_connection = nn.Sequential(
+            nn.Conv2d(channels, channels, kernel_size=1),
+            nn.BatchNorm2d(channels)
+        )
 
     def forward(self, x):
         residual = self.dilated_conv(x)
@@ -18,17 +24,39 @@ class SpeakerEmbedder(nn.Module):
     def __init__(self, num_blocks=5):
         super(SpeakerEmbedder, self).__init__()
         self.conv1 = nn.Conv2d(1, 32, kernel_size=5, stride=1, padding=2)
-        self.pool = nn.MaxPool2d(2, return_indices=True)
+        self.pool = nn.MaxPool2d(2)
         self.conv2 = nn.Conv2d(32, 64, kernel_size=3, stride=2, padding=1)
         self.conv3 = nn.Conv2d(64,128, kernel_size=3, stride=2, padding=1)
-        self.decon3 = nn.ConvTranspose2d(128, 64, kernel_size=3, stride=2, padding=1,output_padding=1)
-        self.decon2 = nn.ConvTranspose2d(64, 32, kernel_size=3, stride=2, padding=1,output_padding=1)
-        self.unpool = nn.MaxUnpool2d(2, 2)
-        self.initial_conv = nn.Conv2d(32, 32, kernel_size=1)
-        self.res_blocks = nn.ModuleList([ResidualBlock(32, 2 ** i) for i in range(num_blocks)])
+        self.decon3 = nn.Sequential(
+            nn.ConvTranspose2d(128, 64, kernel_size=3, stride=2, padding=1,output_padding=1),
+            nn.BatchNorm2d(64)
+        )
+        self.decon2 = nn.Sequential(
+            nn.ConvTranspose2d(64, 64, kernel_size=3, stride=2, padding=1,output_padding=1),
+            nn.BatchNorm2d(64)
+        )
+        self.decon1 = nn.Sequential(
+            nn.ConvTranspose2d(64, 64, kernel_size=3, stride=2, padding=1,output_padding=1),
+            nn.BatchNorm2d(64)
+        )
+        self.res_blocks = nn.ModuleList([ResidualBlock(64, 2 ** i) for i in range(num_blocks)])
         self.avg_pooling = nn.AvgPool2d(2)
-        self.mean_layer = nn.Conv2d(32, 32, kernel_size=3, padding=1)
-        self.log_var_layer = nn.Conv2d(32, 32, kernel_size=3, padding=1)
+        self.mean_layer = nn.Sequential(
+            nn.Conv2d(64, 64, kernel_size=3, padding=1),
+            nn.BatchNorm2d(64)
+        )
+        self.log_var_layer = nn.Sequential(
+            nn.Conv2d(64, 64, kernel_size=3, padding=1),
+            nn.BatchNorm2d(64)
+        )
+        state_dict = torch.load('best_predictor.pth')
+        self.conv1.weight.data = state_dict['conv1.weight']
+        self.conv1.bias.data = state_dict['conv1.bias']
+        self.conv2.weight.data = state_dict['conv2.weight']
+        self.conv2.bias.data = state_dict['conv2.bias']
+        self.conv3.weight.data = state_dict['conv3.weight']
+        self.conv3.bias.data = state_dict['conv3.bias']
+
         for param in self.conv1.parameters():
             param.requires_grad = False
 
@@ -48,7 +76,7 @@ class SpeakerEmbedder(nn.Module):
         x = (x - x.mean()) / x_std
         
         x = self.conv1(x)
-        x, indx = self.pool(x)
+        x = self.pool(x)
         x = self.conv2(x)
         x = self.conv3(x)
         y = y.unsqueeze(1)
@@ -58,7 +86,7 @@ class SpeakerEmbedder(nn.Module):
         y = (y - y.mean()) / y_std
         
         y = self.conv1(y)
-        y, indy = self.pool(y)
+        y = self.pool(y)
         y = self.conv2(y)
         y = self.conv3(y)
         z = z.unsqueeze(1)
@@ -67,38 +95,39 @@ class SpeakerEmbedder(nn.Module):
             z_std = eps
         z = (z - z.mean()) / z_std
         z = self.conv1(z)
-        z, zind = self.pool(z)
+        z = self.pool(z)
         z = self.conv2(z)
         z = self.conv3(z)
         
         x= self.decon3(x)
        
         x= self.decon2(x)
-        x= self.unpool(x,indx)
+        x= self.decon1(x)
         y= self.decon3(y)
         y= self.decon2(y)
-        y= self.unpool(y,indy)
+        y= self.decon1(y)
         z= self.decon3(z)
         z= self.decon2(z)
-        z = self.unpool(z,zind)
+        z = self.decon1(z)
         x = torch.cat((x, y,z,x,y,z,x), dim=3)
         
         x = x[:, :, :, :376]
         
-        x = self.initial_conv(x)
+        #x = self.initial_conv(x)
         for block in self.res_blocks:
             x = block(x)
         x = self.avg_pooling(x)
         mean = self.mean_layer(x)
      
         log_var = self.log_var_layer(x)
-        if self.training:
+        return mean, log_var
+        """  if self.training:
             std = torch.exp(0.5 * log_var)
             eps = torch.randn_like(std)
             return mean + eps * std, log_var
         else:
             return mean, log_var
-    
+        """
 if __name__=="__main__": 
     # Parametry
     in_channels = 80  # Przykładowa liczba kanałów wejściowych (np. dla spektrogramów mel)
