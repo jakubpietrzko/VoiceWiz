@@ -30,4 +30,3 @@ def display_melspectrograms_from_pt(pt_file_path1, pt_file_path2):
 
 # Przykładowe użycie:
 display_melspectrograms_from_pt('..//data//results//gen_output_mel.pt','..//data//results//source.pt' )
-

@@ -78,7 +78,7 @@ class VoiceConversionModel(nn.Module):
         if torch.isnan(result).any() == True or  torch.isinf(result).any() == True:
             print("result nan")
             return w*1.3
-        return w / (1 + torch.exp(-7*(result-0.3)))
+        return w / (1 + torch.exp(-5*(result-0.3)))
     def LAsr(self,mini_batch_x1,mini_batch_result):
         # Załóżmy, że asr_features1 i asr_features2 to batche tensorów wyjściowych z ASR dla oryginalnej i wygenerowanej mow
         mini_batch_x1 = mini_batch_x1.squeeze(1)
@@ -164,22 +164,30 @@ class VoiceConversionModel(nn.Module):
         disc_output_real = self.discriminator(y)
         #print("rozmiary na wej dyskr fake", gen_output_mel.shape)
         disc_output_fake = self.discriminator(gen_output_mel)
-
+        disc_output_goal = self.discriminator(goal)
+        real_labels = torch.ones_like(disc_output_real)
+        fake_labels = torch.zeros_like(disc_output_fake)
+        
         #Oblicz stratę dyskryminatora dla prawdziwej i wygenerowanej próbki
-        loss_disc = self.LAdvD(disc_output_fake,disc_output_real)
+        loss_disc1 = self.bce_loss(disc_output_real, real_labels)
+        loss_disc2=self.bce_loss(disc_output_fake, fake_labels)
+        loss_disc3=self.bce_loss(disc_output_goal, real_labels)
+       
+        #loss_disc = self.LAdvD(disc_output_fake,disc_output_real)
         w_pred = 0.1
         w_asr = 0
         w_rec = 45
         w_gen = 2
         if ep > 1:
             w_gen = 2
-            w_pred = 10
-            w_asr = 0.1
-            w_rec = 45
-            loss_asr = self.LAsr(x, gen_output)
-        if ep>3:
             w_pred = 20
-            w_asr = 1
+            w_asr = 0
+            w_rec = 45
+            
+        if ep>5:
+            w_pred = 20
+            w_asr = 0.1
+            loss_asr = self.LAsr(x, gen_output)
             
         loss_pred = self.LPred(gen_output_mel, goal,w_pred)
         
@@ -197,35 +205,40 @@ class VoiceConversionModel(nn.Module):
 
         #print("01loss_spk", 0.1*loss_spk)
         print("10 loss_pred", loss_pred)
-        print("loss_disc", loss_disc)
-        if ep >1:
+        print("loss_disc real", loss_disc1)
+        print("loss_disc fake", loss_disc2)
+        print("loss_disc goal", loss_disc3)
+        if ep >5:
             print("01loss_asr", w_asr*loss_asr)
             loss_gen = w_rec*loss_rec + w_gen*loss_adv_p  + loss_pred +w_asr*loss_asr
         else:
             loss_gen = w_rec*loss_rec + w_gen*loss_adv_p  + loss_pred
 
         # Wyzeruj wszystkie gradienty
-        self.optimizer_disc.zero_grad()
+        
         self.optimizer_gen.zero_grad()
        
         self.optimizer_speaker.zero_grad()
 
         # Wykonaj backpropagation dla straty dyskryminatora
+        self.optimizer_disc.zero_grad()
+        loss_disc1.mean().backward(retain_graph=True)
+        loss_disc2.mean().backward(retain_graph=True)
+        loss_disc3.mean().backward(retain_graph=True)
         
-        loss_disc.mean().backward(retain_graph=True)
-
         
 
         # Wykonaj backpropagation dla straty generatora
         loss_gen.backward()
         # Aktualizuj wagi dyskryminatora
         self.optimizer_disc.step()
+
         # Aktualizuj wagi generatora, f0_encoder i speaker_embedder
         self.optimizer_gen.step()
 
         self.optimizer_speaker.step()
     
-        return loss_gen.mean(), loss_disc.mean()
+        return loss_gen.mean()
 
     def evaluate_step(self, x, goal,cnt):
         self.eval()  # Ustawienie modelu w tryb ewaluacji
@@ -288,7 +301,7 @@ class VoiceConversionModel(nn.Module):
             loss_gen = w_rec*loss_rec + w_gen*loss_adv_p  + loss_pred +w_asr*loss_asr
 
         return loss_gen, loss_disc
-    def train_model(self, epochs=5, patience=3):
+    def train_model(self, epochs=5, patience=3, starting_epoch=1, batch_size=8):
         self.train() 
         self.to(self.device)
         warnings.filterwarnings("ignore")
@@ -298,7 +311,7 @@ class VoiceConversionModel(nn.Module):
         # Utwórz obiekty Dataset
         raw_dataset = AudioDatasetRAW(PATH_FOLDER)
         mel_dataset = AudioDatasetMEL(PATH_FOLDER2)
-        batch_size_on = 8
+        batch_size_on = batch_size
         # Utwórz obiekty DataLoader
         raw_dataloader = DataLoader(raw_dataset, batch_size=batch_size_on, shuffle=True)
         mel_dataloader = DataLoader(mel_dataset, batch_size=batch_size_on, shuffle=True)
@@ -307,7 +320,7 @@ class VoiceConversionModel(nn.Module):
         best_loss = float('inf')  # Inicjalizacja najlepszej straty jako nieskonczonosc
         no_improve_epochs = 0  # Licznik epok bez poprawy
 
-        for epoch in range(epochs):
+        for epoch in range(starting_epoch,epochs):
             running_loss = 0  # Inicjalizacja bieżącej straty
             cnt=0
             if epoch == 7:
@@ -323,7 +336,7 @@ class VoiceConversionModel(nn.Module):
                 batch_y = batch_y.to(self.device)
                 cnt+=1
                 # Trening na danych treningowych
-                loss ,dys = self.train_step(batch_x, batch_y,cnt, epoch)
+                loss  = self.train_step(batch_x, batch_y,cnt, epoch)
                 stop = time.time()
                 
                 print()
@@ -334,7 +347,7 @@ class VoiceConversionModel(nn.Module):
             # Obliczanie średniej straty dla epoki
             avg_loss = running_loss / len(mel_dataloader)
             with open('log.txt', 'a') as f:
-                f.write(f'Epoka: {epoch+1}, średnia strata: {avg_loss}\n')
+                f.write(f'Epoka: {epoch}, średnia strata: {avg_loss}\n')
 
                 # Zapisz model, jeśli strata jest niższa
                 if avg_loss < best_loss:
@@ -376,9 +389,14 @@ if __name__ == "__main__":
     warnings.filterwarnings("ignore")
     device = torch.device('cuda')
     x=VoiceConversionModel(device)
-    print("trening start")
-    """x.load_state_dict(torch.load("best_model lrec40.pth"))
-    x.eval()
-     
-    x.run_model()"""
-    x.train_model(epochs=50, patience=5)
+    x = x.to(device)
+    # Wczytaj state_dict z pliku
+    state_dict = torch.load("..//best_model_ep1.pth")
+
+    # Usuń klucze związane z vocoderem
+    state_dict = {k: v for k, v in state_dict.items() if not k.startswith('generator.vocoder')}
+
+    # Wczytaj state_dict do modelu
+    x.load_state_dict(state_dict, strict=False)
+    #x.run_model()
+    x.train_model(epochs=50, patience=5, starting_epoch=2, batch_size = 8)
