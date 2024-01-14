@@ -5,7 +5,7 @@ import librosa
 from torch.utils.data import Dataset
 
 class AudioDataset(Dataset):
-    def __init__(self, wav_directory, mel_directory, num_samples=5000):
+    def __init__(self, wav_directory, mel_directory, num_samples=3000):
         self.wav_directory = wav_directory
         self.mel_directory = mel_directory
         self.speaker_dirs = os.listdir(wav_directory)

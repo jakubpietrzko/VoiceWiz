@@ -13,6 +13,7 @@ import os
 import random
 from speechbrain.lobes.models.FastSpeech2 import mel_spectogram
 import os
+from speechbrain.pretrained import HIFIGAN
 from predictor import Predictor
 import time
 import numpy as np
@@ -31,6 +32,13 @@ class VoiceConversionModel(nn.Module):
         self.speaker_embedder = SpeakerEmbedder().to(device)
         self.generator = Generator(speaker_embedding_dim=1).to(device)
         self.discriminator = Discriminator().to(device)
+        self.vocoder = HIFIGAN.from_hparams(source="speechbrain/tts-hifigan-libritts-16kHz", savedir="vocoder_16khz", run_opts={"device": "cuda"})
+    
+        self.vocoder.eval()
+        
+        
+        for param in self.vocoder.parameters():
+            param.requires_grad = False
         self.bce_loss = nn.BCELoss()
             # Zamroź parametry ASR
         for param in self.asr_encoder.parameters():
@@ -39,7 +47,7 @@ class VoiceConversionModel(nn.Module):
             param.requires_grad = False 
         self.optimizer_speaker = torch.optim.Adam(self.speaker_embedder.parameters(), lr=0.001)
         self.optimizer_gen = torch.optim.Adam(self.generator.parameters(), lr=0.001)
-        self.optimizer_disc = torch.optim.Adam(self.discriminator.parameters(), lr=0.001)
+        self.optimizer_disc = torch.optim.Adam(self.discriminator.parameters(), lr=0.0002)
         
     def forward(self, y):
         # Przejdź do przodu przez speaker_embedder, asr_encoder i f0_encoder
@@ -132,7 +140,7 @@ class VoiceConversionModel(nn.Module):
         goal_len = goal_len.squeeze(1)
         
         _, emb = self.nvidiapred.forward(input_signal=source, input_signal_length=source_len)
-        
+       
         speaker_embedding = self.speaker_embedder(emb)
         
         """t = torch.cuda.get_device_properties(0).total_memory
@@ -144,12 +152,12 @@ class VoiceConversionModel(nn.Module):
         print(f"Allocated memory: {a/1024**3}")
         print(f"Free inside reserved: {f/1024**3}")    """    
         #Przejdź do przodu przez generator
-      
-        gen_output, gen_output_mel = self.generator(mel,speaker_embedding, ep,cnt)
-        
+       
+        gen_output_mel = self.generator(mel,speaker_embedding, ep,cnt)
+        gen_output = self.vocoder.decode_batch(gen_output_mel)
         #Utwórz transformację MelSpectrogram
         gen_output = gen_output.narrow(2, 0, 80000)
-        if  cnt%200==0 or cnt == 10:
+        if  cnt%200==0 or cnt == 10 or cnt ==100:
             # Zapisz tylko pierwszą próbkę z gen_output_mel
             print("Nadpisano probki")
             print("Nadpisano probki")
@@ -167,13 +175,13 @@ class VoiceConversionModel(nn.Module):
         #print(gen_output_mel.shape)
         #print(mel.shape)
         #gen_output_mel = gen_output_mel.squeeze(1)
-
+      
         disc_output_real = self.discriminator(mel)
 
         #print("rozmiary na wej dyskr fake", gen_output_mel.shape)
         #print("po d mel")
-   
-        disc_output_fake = self.discriminator(gen_output_mel)
+        
+        disc_output_fake = self.discriminator(gen_output_mel.detach())
         
         #print()
         #disc_output_goal = self.discriminator(goal)
@@ -181,17 +189,18 @@ class VoiceConversionModel(nn.Module):
         fake_labels = torch.zeros_like(disc_output_fake)
         
         #Oblicz stratę dyskryminatora dla prawdziwej i wygenerowanej próbki
+        
         loss_disc1 = self.bce_loss(disc_output_real, real_labels)
         loss_disc2=self.bce_loss(disc_output_fake, fake_labels)
         #loss_disc3=self.bce_loss(disc_output_goal, real_labels)
-        
+        loss_disc = loss_disc1 + loss_disc2 #+ loss_disc3
         #loss_disc = self.LAdvD(disc_output_fake,disc_output_real)
         w_pred = 0.1
         w_asr = 0
         w_rec = 45
-        w_gen = 2
+        w_gen = 0.1
         if ep > 1:
-            w_gen = 2
+            w_gen = 1
             w_pred = 20
             w_asr = 0
             w_rec = 45
@@ -202,6 +211,7 @@ class VoiceConversionModel(nn.Module):
             loss_asr = self.LAsr(source, gen_output, goal_len)
         
         gen_output = gen_output.squeeze(1)
+     
         with torch.no_grad():
             
             _, embs1 = self.nvidiapred.forward(input_signal=gen_output.detach() , input_signal_length=goal_len)
@@ -214,11 +224,10 @@ class VoiceConversionModel(nn.Module):
         
         loss_pred = self.LPred(embs1,embs2,w_pred)
         
-        
         #obliczstrate rekonstrukcji
         loss_rec= self.LRec(mel, gen_output_mel)
         #oblicz loss_adv_p
-        loss_adv_p = self.LAdvP(disc_output_fake)
+        loss_adv_p = self.LAdvP(disc_output_fake.detach())
         #oblicz loss_spk
         #loss_spk = self.LSpk(log_var)
         #Oblicz stratę generatora, f0_encoder i speaker_embedder
@@ -239,27 +248,32 @@ class VoiceConversionModel(nn.Module):
 
         # Wyzeruj wszystkie gradienty
         
+        # Na początku pętli treningowej
         self.optimizer_gen.zero_grad()
-       
+        self.optimizer_disc.zero_grad()
         self.optimizer_speaker.zero_grad()
 
-        # Wykonaj backpropagation dla straty dyskryminatora
-        self.optimizer_disc.zero_grad()
-        loss_disc1.mean().backward(retain_graph=True)
-        loss_disc2.mean().backward(retain_graph=True)
-        #loss_disc3.mean().backward(retain_graph=True)
-        
-        
-
-        # Wykonaj backpropagation dla straty generatora
-        loss_gen.backward()
-        # Aktualizuj wagi dyskryminatora
+        # Zamrożenie i trening dyskryminatora
+        for param in self.generator.parameters():
+            param.requires_grad = False
+        for param in self.speaker_embedder.parameters():
+            param.requires_grad = False
+        loss_disc.mean().backward()
         self.optimizer_disc.step()
 
-        # Aktualizuj wagi generatora, f0_encoder i speaker_embedder
+        # Odmrożenie generatora i trening generatora
+        for param in self.generator.parameters():
+            param.requires_grad = True
+        for param in self.speaker_embedder.parameters():
+            param.requires_grad = True
+        for param in self.discriminator.parameters():
+            param.requires_grad = False
+        
+        loss_gen.backward()
         self.optimizer_gen.step()
-
         self.optimizer_speaker.step()
+        for param in self.discriminator.parameters():
+            param.requires_grad = True
         
         return loss_gen.mean()
 
@@ -418,4 +432,4 @@ if __name__ == "__main__":
     # Wczytaj state_dict do modelu
     #x.load_state_dict(state_dict, strict=False)
     #x.run_model()
-x.train_model(epochs=50, patience=5, starting_epoch=1, batch_size = 2)
+    x.train_model(epochs=50, patience=5, starting_epoch=1, batch_size = 4)

@@ -66,6 +66,6 @@ def display_melspectrograms_from_pt(pt_file_path1, pt_file_path2):
 
 
 # Przykładowe użycie:
-#display_melspectrograms_from_pt('..//data//results//gen_output_mel.pt','..//data//results//source.pt' )
-display_melspectrograms_from_pt('..//data//wavs_mels//p225//p225_001_mic2.pt','..//data//wavs_mels//p226//p226_001_mic2.pt' )
+display_melspectrograms_from_pt('..//data//results//gen_output_mel.pt','..//data//results//source.pt' )
+#display_melspectrograms_from_pt('..//data//wavs_mels//p225//p225_001_mic2.pt','..//data//wavs_mels//p226//p226_001_mic2.pt' )
 #process_audio_files('..//data//wavs_22khz', '..//data//wavs_22khz_5s')
