@@ -60,25 +60,59 @@ class Prepare():
                 y, sr = librosa.load(audio_file_path, sr=None)
                 duration = len(y) / sr
 
-                if duration < 6 and duration > 4:
+                if duration < 5 and duration > 2:
                     # Uzupełnij ciszą do 6 sekund
-                    y_padded = np.pad(y, (0, int(6*sr - len(y))), 'constant')
+                    y_padded = np.pad(y, (0, int(5*sr - len(y))), 'constant')
                     output_file_path = os.path.join(self.output_folder, audio_file)
                     print(f'Zapisywanie pliku {output_file_path}...')
                     sf.write(output_file_path, y_padded, sr)
-                elif duration > 6:
+                elif duration > 5:
                     # Podziel na segmenty o długości 6 sekund
-                    for i, start in enumerate(range(0, len(y), int(6*sr))):
-                        segment = y[start:start+int(6*sr)]
-                        output_file_name = f'{os.path.splitext(audio_file)[0]}_{i+1}.wav' if duration > 6 else audio_file
+                    for i, start in enumerate(range(0, len(y), int(5*sr))):
+                        segment = y[start:start+int(5*sr)]
+                        output_file_name = f'{os.path.splitext(audio_file)[0]}_{i+1}.wav' if duration > 5 else audio_file
                         output_file_path = os.path.join(self.output_folder, output_file_name)
-                        if len(segment) == int(6*sr):
-                            # Zapisz 6-sekundowy segment
+                        if len(segment) == int(5*sr):
+                            # Zapisz 5-sekundowy segment
                             sf.write(output_file_path, segment, sr)
-                        elif len(segment) / sr > 4:
-                            # Uzupełnij ciszą do 6 sekund
-                            segment_padded = np.pad(segment, (0, int(6*sr - len(segment))), 'constant')
-                            sf.write(output_file_path, segment_padded, sr)         
+                        elif len(segment) / sr > 2:
+                            # Uzupełnij ciszą do 5 sekund
+                            segment_padded = np.pad(segment, (0, int(5*sr - len(segment))), 'constant')
+                            sf.write(output_file_path, segment_padded, sr)  
+                                   
+    def process_audio_filesv2(self):
+        for root, dirs, files in os.walk(self.audio_folder):
+            for audio_file in files:
+                if audio_file.endswith('.wav'):
+                    print(f'Przetwarzanie pliku {audio_file}...')
+                    audio_file_path = os.path.join(root, audio_file)
+                    y, sr = librosa.load(audio_file_path, sr=None)
+                    duration = len(y) / sr
+
+                    # Tworzenie odpowiednich katalogów w folderze wyjściowym
+                    relative_path = os.path.relpath(root, self.audio_folder)
+                    output_folder_path = os.path.join(self.output_folder, relative_path)
+                    os.makedirs(output_folder_path, exist_ok=True)
+
+                    if duration < 5 and duration > 2:
+                        # Uzupełnij ciszą do 6 sekund
+                        y_padded = np.pad(y, (0, int(5*sr - len(y))), 'constant')
+                        output_file_path = os.path.join(output_folder_path, audio_file)
+                        print(f'Zapisywanie pliku {output_file_path}...')
+                        sf.write(output_file_path, y_padded, sr)
+                    elif duration > 5:
+                        # Podziel na segmenty o długości 6 sekund
+                        for i, start in enumerate(range(0, len(y), int(5*sr))):
+                            segment = y[start:start+int(5*sr)]
+                            output_file_name = f'{os.path.splitext(audio_file)[0]}_{i+1}.wav' if duration > 5 else audio_file
+                            output_file_path = os.path.join(output_folder_path, output_file_name)
+                            if len(segment) == int(5*sr):
+                                # Zapisz 5-sekundowy segment
+                                sf.write(output_file_path, segment, sr)
+                            elif len(segment) / sr > 2:
+                                # Uzupełnij ciszą do 5 sekund
+                                segment_padded = np.pad(segment, (0, int(5*sr - len(segment))), 'constant')
+                                sf.write(output_file_path, segment_padded, sr)
     def create_melspectrogram(self):
         for file in os.listdir(self.audio_folder):                 
             if file.endswith('.wav'):

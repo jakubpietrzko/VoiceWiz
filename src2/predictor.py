@@ -9,40 +9,50 @@ from speechbrain.lobes.models.FastSpeech2 import mel_spectogram
 import torch
 import time
 import torchaudio
-from AudioDataset import AudioDatasetMEL as AudioDataset
+from predictor_dataloader import SpeakerDataset
 from torchvision import transforms
 import torch.nn.functional as F
 class Predictor(nn.Module):
     def __init__(self):
         super(Predictor, self).__init__()
-        self.conv1 = nn.Conv2d(1, 32, kernel_size=5, stride=1, padding=1)
-        self.pool = nn.MaxPool2d(2, 2)
-        self.conv2 = nn.Conv2d(32, 64, kernel_size=3, stride=2, padding=1)
-        self.conv3 = nn.Conv2d(64,128, kernel_size=3, stride=2, padding=1)
-        self.fc1 = nn.Linear(2048, 1024)  # Zmieniamy rozmiar wejścia na podstawie wymiarów po pooling
+        def conv_block(in_channels, out_channels):
+            return nn.Sequential(
+                nn.Conv2d(in_channels, out_channels, 3, padding=1),
+                nn.BatchNorm2d(out_channels),  # Dodajemy normalizację wsadową
+                nn.LeakyReLU(0.2),
+                nn.Conv2d(out_channels, out_channels, 3, padding=1),
+                nn.BatchNorm2d(out_channels),  # Dodajemy normalizację wsadową
+                nn.LeakyReLU(0.2),
+            )
+        #encoder like U-Net
+        self.encoder = nn.Sequential(
+            conv_block(1, 16),
+            conv_block(16, 32),
+            conv_block(32, 64),
+            conv_block(64, 64),
+            nn.MaxPool2d(2, 2),
+            conv_block(64, 128),
+            nn.MaxPool2d(2, 2),
+            conv_block(128, 256),
+            nn.MaxPool2d(2, 2),
+            conv_block(256, 256),
+            nn.MaxPool2d(2, 2),
+            conv_block(256, 256),
+            nn.MaxPool2d(2, 2),
+         
+        )
         
-        self.fc2 = nn.Linear(1024, 1024)
+        self.fc0 = nn.Linear(13312, 7000)
+        self.fc1 = nn.Linear(7000, 3048) 
+        self.fc2 = nn.Linear(3048, 1024)
         self.fc3= nn.Linear(1024, 256)
         self.fc4= nn.Linear(256, 1)
-        self.optimizer = torch.optim.Adam(self.parameters())
+        self.optimizer = torch.optim.Adam(self.parameters(), lr=0.0005)
         self.loss = nn.BCELoss()
         self.sample_rate = 22050
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self.conv1.bias.data.fill_(0)
-        self.conv2.bias.data.fill_(0)
-        self.conv3.bias.data.fill_(0)
-        self.fc1.bias.data.fill_(0)
-        self.fc2.bias.data.fill_(0)
-        self.fc3.bias.data.fill_(0)
-        self.fc4.bias.data.fill_(0)
-        nn.init.xavier_uniform_(self.conv1.weight)
-        nn.init.xavier_uniform_(self.conv2.weight)
-        nn.init.xavier_uniform_(self.conv3.weight)
-        nn.init.xavier_uniform_(self.fc1.weight)
-        nn.init.xavier_uniform_(self.fc2.weight)
-        nn.init.xavier_uniform_(self.fc3.weight)
-        nn.init.xavier_uniform_(self.fc4.weight)
-        self.load_state_dict(torch.load('best_predictor.pth'))
+
+        #self.load_state_dict(torch.load('best_predictor.pth'))
     def forward(self, mel1, mel2):
        
         mel1 = mel1.unsqueeze(1)
@@ -60,7 +70,7 @@ class Predictor(nn.Module):
         #mel2 = F.softmax(mel2, dim=2)
         #print(mel1)
         #print(mel2)
-        x1 = self.pool(F.leaky_relu(self.conv1(mel1)))
+        """x1 = self.pool(F.leaky_relu(self.conv1(mel1)))
         x1 = self.pool(F.leaky_relu(self.conv2(x1)))
         x1 = self.pool(F.leaky_relu(self.conv3(x1)))
         x1 = x1.view(x1.size(0), -1)  # Spłaszczenie
@@ -68,96 +78,71 @@ class Predictor(nn.Module):
         x2 = self.pool(F.leaky_relu(self.conv1(mel2)))
         x2 = self.pool(F.leaky_relu(self.conv2(x2)))
         x2 = self.pool(F.leaky_relu(self.conv3(x2)))
+        x2 = x2.view(x2.size(0), -1)  # Spłaszczenie"""
+        x1 = self.encoder(mel1)
+        x1 = x1.view(x1.size(0), -1)  # Spłaszczenie
+        x2 = self.encoder(mel2)
         x2 = x2.view(x2.size(0), -1)  # Spłaszczenie
         x = torch.cat((x1, x2), dim=1)
-        
+        x= F.leaky_relu(self.fc0(x))
         x = F.leaky_relu(self.fc1(x))
         x = F.leaky_relu(self.fc2(x))
         x= F.leaky_relu(self.fc3(x))
         x = torch.sigmoid(self.fc4(x))
         #print("x", x)
         return x
-    def train_on_batch(self, batch_y):
-        # Dzielenie batcha na dwie części
-        half_batch_size = len(batch_y) // 2
-        batch_y1 = batch_y[:half_batch_size]
-        batch_y2 = batch_y[half_batch_size:]
-
-        # Wybieranie losowych 1,5-sekundowych fragmentów z każdej próbki
-        batch_y1_segments = self.select_random_segments(batch_y1)
-        batch_y1_an_segments = self.select_random_segments(batch_y1)
-        batch_y2_segments = self.select_random_segments(batch_y2)
-        
-        # Pierwsze przejście i propagacja wsteczna
+    def train_on_batch(self, batch):
+        # Dzielenie batcha na dane i etykiety
+        batch_x,batch_z ,batch_y = batch
+        batch_x = batch_x.to(self.device)
+        batch_z = batch_z.to(self.device)
+        batch_y = batch_y.to(self.device)
+        #batch_x = self.select_random_segments(batch_x)
+        #batch_z = self.select_random_segments(batch_z)
+        # Przejście i propagacja wsteczna
         self.optimizer.zero_grad()
-        y_pred1 = self(batch_y1_segments, batch_y1_an_segments)
-        if not torch.isnan(y_pred1).any():
-            loss1 = self.loss(y_pred1.squeeze(), torch.zeros(half_batch_size, device=self.device))
-            loss1.backward()
+        y_pred = self(batch_x, batch_z)
+        if not torch.isnan(y_pred).any():
+            batch_y = batch_y.float() 
+            loss = self.loss(y_pred.squeeze(), batch_y)
+            loss.backward()
             self.optimizer.step()
 
-        # Drugie przejście i propagacja wsteczna
-        self.optimizer.zero_grad()
-        y_pred2 = self(batch_y1_segments, batch_y2_segments)
-        if not torch.isnan(y_pred2).any():
-            loss2 =  self.loss(y_pred2.squeeze(), torch.ones(half_batch_size, device=self.device))
-            loss2.backward()
-            self.optimizer.step()
-        #print(loss1.item() + loss2.item())
-            return (loss1.item() + loss2.item()) / 2
+            return loss.item()
+        print("syf")
+        return 0
+
+    def validation_on_batch(self, batch):
+        # Dzielenie batcha na dane i etykiety
+        batch_x, batch_y = batch
+        batch_x = batch_x.to(self.device)
+        batch_y = batch_y.to(self.device)
+
+        # Przejście
+        y_pred = self(batch_x)
+        if not torch.isnan(y_pred).any():
+            loss = self.loss(y_pred.squeeze(), batch_y)
+
+            return loss.item()
         print("syf")
         return 0
     def run_model(self, mel1, mel2):
 
         self.eval()
-        """mel1,_ = torchaudio.load(mel1)#zakomentuj obie linie jak uzywasz z glownego modelu
-        mel2,_  =torchaudio.load(mel2)
+
         mel1=mel1.to(self.device)
         mel2=mel2.to(self.device)
-       
-        mel1,_= mel_spectogram(
-            audio=mel1.squeeze(),
-            sample_rate=16000,
-            hop_length=256,
-            win_length=1024,
-            n_mels=80,
-            n_fft=1024,
-            f_min=0.0,
-            f_max=8000.0,
-            power=1,
-            normalized=False,
-            min_max_energy_norm=True,
-            norm="slaney",
-            mel_scale="slaney",
-            compression=True
-        )
-        mel2,_= mel_spectogram(
-            audio=mel2.squeeze(),
-            sample_rate=16000,
-            hop_length=256,
-            win_length=1024,
-            n_mels=80,
-            n_fft=1024,
-            f_min=0.0,
-            f_max=8000.0,
-            power=1,
-            normalized=False,
-            min_max_energy_norm=True,
-            norm="slaney",
-            mel_scale="slaney",
-            compression=True
-        )
         mel1=mel1.unsqueeze(0)
-        mel2=mel2.unsqueeze(0)"""
+        mel2=mel2.unsqueeze(0)
         with torch.no_grad():
-            
+            print(mel1)
             mel1segments = self.select_random_segments(mel1)
             mel2segments = self.select_random_segments(mel2)    
             #print(mel1segments.shape, mel2segments.shape)
             result = self(mel1segments, mel2segments)
             #print(result)
             return result
-    def validation_on_batch(self, batch_y):
+    """def validation_on_batch(self, batch_y):
         # Dzielenie batcha na dwie części
         half_batch_size = len(batch_y) // 2
         batch_y1 = batch_y[:half_batch_size]
@@ -178,9 +163,9 @@ class Predictor(nn.Module):
         #print("walidacja",loss1.item() + loss2.item())
             return (loss1.item() + loss2.item()) / 2
         print("syf")
-        return 0
-    def select_random_segments(self, samples, segment_length = 128):
-        
+        return 0"""
+    def select_random_segments(self, samples, segment_length = 256):
+        #print(samples.shape)
         segments = []
         for sample in samples:
             
@@ -190,7 +175,7 @@ class Predictor(nn.Module):
         return torch.stack(segments)
         
     
-    def prepare_dataset_goal(self, mels_goal):
+    """def prepare_dataset_goal(self, mels_goal):
         dataset = AudioDataset(mels_goal)
         data_loader = DataLoader(dataset, batch_size=1, shuffle=True, num_workers=4)
 
@@ -278,7 +263,56 @@ class Predictor(nn.Module):
                     print("Early stopping")
                     break
 
-            self.train()  # Przełącz model z powrotem w tryb treningu           
+            self.train()  # Przełącz model z powrotem w tryb treningu  """    
+    def train_model(self, epochs, patience):
+        self.train()
+        torch.cuda.empty_cache()
+        self.to(self.device)
+        
+        dataset = SpeakerDataset('..\\data\\wavs_mels')
+        train_size = int(0.8 * len(dataset))
+        val_size = len(dataset) - train_size
+        train_dataset, val_dataset = torch.utils.data.random_split(dataset, [train_size, val_size])
+        batchsize=4
+        train_dataloader = DataLoader(train_dataset, batch_size=batchsize, shuffle=True, num_workers=4)
+        val_dataloader = DataLoader(val_dataset, batch_size=batchsize, shuffle=True, num_workers=4)
+        
+        best_val_loss = float('inf')
+        patience_counter = 0
+
+        for epoch in range(epochs):
+            # Trening
+            cnt=0
+            start = time.time()
+            for batch in train_dataloader:
+                cnt+=1
+                loss = self.train_on_batch(batch)
+                stop = time.time()
+                print(f'Ep {epoch} step: {cnt* batchsize}, Loss: {loss}, time: {stop-start}')
+            
+            # Walidacja
+            total_val_loss = 0
+            self.eval()
+            with torch.no_grad():
+                for batch in val_dataloader:
+                    val_loss = self.validation_on_batch(batch)
+                    total_val_loss += val_loss
+            
+            avg_val_loss = total_val_loss / len(val_dataloader)
+            print(f'Validation Loss: {avg_val_loss}')
+            
+            # Sprawdzanie, czy strata walidacji jest najlepsza
+            if avg_val_loss < best_val_loss:
+                best_val_loss = avg_val_loss
+                # Zapisywanie najlepszego modelu
+                torch.save(self.state_dict(), 'best_predictor v2.pth')
+                patience_counter = 0
+            else:
+                patience_counter += 1
+                # Wczesne zatrzymanie, jeśli strata walidacji nie poprawiła się przez określoną liczbę epok
+                if patience_counter == patience:
+                    print('Early stopping')
+                    break     
     def evaluate_model(self, test_dataset_path):
         self.eval()
 
@@ -294,7 +328,7 @@ class Predictor(nn.Module):
         num_batches = 0
 
         # Ustal rozmiar mini-batcha
-        size_of_mini_batch = 16
+        size_of_mini_batch = 12
 
         with torch.no_grad():
             for i in range(0, len(test_dataloader), size_of_mini_batch):
@@ -359,9 +393,10 @@ if __name__ == "__main__":
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')  # Ustal urządzenie
     model = Predictor()  # Tworzenie modelu
     model = model.to(device)
-    
-    x=model.run_model('..\\data\\parts6s_resampled\\common_voice_en_38132196.wav','..\\data\\parts6s_resampled\\common_voice_en_38132197_1.wav')
+    #mel1 = torch.load('..\\data\\wavs_mels\\p226\\p226_179_mic1.pt')
+    #mel2 = torch.load('..\\data\\wavs_mels\\p232\\p232_006_mic2_1.pt')
+    #x=model.run_model(mel1, mel2)
     #model.evaluate_model('..\\data\\parts6s_resampled\\')
-    #model.train_model(epochs=100, patience=5)
-    print(x)
+    model.train_model(epochs=100, patience=5)
+    ##print(x)
     #Loss: 0.1767, Accuracy: 0.9325, Precision: 0.7929, Recall: 0.9663

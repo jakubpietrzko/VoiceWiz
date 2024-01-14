@@ -29,6 +29,7 @@ class Generator(nn.Module):
         super(Generator, self).__init__()
         # Warstwa osadzająca mówcę
         self.fc_speaker1 = nn.Sequential(
+            
             nn.Conv2d(speaker_embedding_dim, 64, kernel_size=3 , stride=1, padding=1),
             nn.BatchNorm2d(64),
             
@@ -44,11 +45,11 @@ class Generator(nn.Module):
             nn.BatchNorm2d(64),
         )
         self.conv2 = nn.Sequential(
-            nn.Conv2d(64, 64, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1)),
+            nn.Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1)),
             nn.BatchNorm2d(64),
         )
         self.conv3 = nn.Sequential(
-            nn.Conv2d(64, 64, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1)),
+            nn.Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1)),
             nn.BatchNorm2d(64),
         )
         self.conv4 = nn.Sequential(
@@ -57,15 +58,15 @@ class Generator(nn.Module):
         )
         # Warstwy dekonwolucyjne 2D do modyfikacji melspektrogramu
         self.deconv4 = nn.Sequential(
-            nn.ConvTranspose2d(64, 64, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), output_padding=(1, 1)),
+            nn.ConvTranspose2d(64, 64, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), output_padding=(1,0)),
             nn.BatchNorm2d(64),
         )
         self.deconv3 = nn.Sequential(
-            nn.ConvTranspose2d(64, 64, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), output_padding=(1, 1)),
+            nn.ConvTranspose2d(64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1)),
             nn.BatchNorm2d(64),
         )
         self.deconv2 = nn.Sequential(
-            nn.ConvTranspose2d(64, 64, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1),output_padding=(1, 1)),
+            nn.ConvTranspose2d(64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1)),
             nn.BatchNorm2d(64),
         )
         self.deconv1 = nn.Sequential(
@@ -88,6 +89,7 @@ class Generator(nn.Module):
             param.requires_grad = False
   
     def forward(self, x, speaker_embedding,ep,cnt):
+        speaker_embedding = speaker_embedding.unsqueeze(1)
         speaker_embedding1 = self.fc_speaker1(speaker_embedding)
         xs= x.unsqueeze(1)
         x_std=xs.std()
@@ -99,25 +101,26 @@ class Generator(nn.Module):
         # Przetwarzanie melspektrogramu
         x = F.leaky_relu(self.conv0(xs))
         x = F.leaky_relu(self.conv1(x))
-        x = F.leaky_relu(self.conv2(x))
         for res_block in self.res_blocks:
             x = res_block(x)       
         x= x + speaker_embedding1
         xd=x
+        x = F.leaky_relu(self.conv2(x))
         x = F.leaky_relu(self.conv3(x))
+        x=x+xd
         x = F.leaky_relu(self.conv4(x))
         for res_block in self.res_blocks1:
             x = res_block(x) 
         x = F.leaky_relu(self.deconv4(x))
         x = F.leaky_relu(self.deconv3(x))
-        x= x + xd 
         x = F.leaky_relu(self.deconv2(x))
         x= F.leaky_relu(self.deconv1(x))
         modified_mel = torch.tanh(self.deconv0(x))
+        #print(modified_mel.shape)
         modified_mel = modified_mel*x_std  + x_mean
         modified_mel = modified_mel.squeeze(1)
         
-        if ep>5 or cnt ==10 or cnt%200==0:
+        if True or ep>5 or cnt ==10 or cnt%200==0:
         # Konwersja na audio przy użyciu oryginalnego vokodera
             modified_audio = self.vocoder.decode_batch(modified_mel)
             return modified_audio , modified_mel

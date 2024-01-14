@@ -1,21 +1,24 @@
 import torchaudio
+import torch
 from speechbrain.pretrained import HIFIGAN
 from speechbrain.lobes.models.FastSpeech2 import mel_spectogram
 import time
+
 # Load a pretrained HIFIGAN Vocoder
-hifi_gan = HIFIGAN.from_hparams(source="speechbrain/tts-hifigan-libritts-16kHz", savedir="vocoder_16khz")
+hifi_gan = HIFIGAN.from_hparams(source="speechbrain/tts-hifigan-libritts-22050Hz", savedir="tmpdir_voc22050")
 
 # Load an audio file (an example file can be found in this repository)
 # Ensure that the audio signal is sampled at 16000 Hz; refer to the provided link for a 22050 Hz Vocoder.
 #signal, rate = torchaudio.load('speechbrain/tts-hifigan-libritts-16kHz/example_16kHz.wav')
-signal, rate = torchaudio.load('..//data//parts6s_resampled//common_voice_en_38024636_1.wav')
-if rate != 16000:
+signal, rate = torchaudio.load('..//data//my_vc.wav')
+if rate != 22050:
     # Resample the waveform to 16kHz
-    resampler = torchaudio.transforms.Resample(orig_freq=rate, new_freq=16000)
+    print(rate)
+    resampler = torchaudio.transforms.Resample(orig_freq=rate, new_freq=22050)
     signal = resampler(signal)
-
+    print("jest nie 16")
 # Ensure the audio is sigle channel
-#signal = signal[0].squeeze()
+signal = signal[0].squeeze()
 
 #torchaudio.save('waveform.wav', signal.unsqueeze(0), 16000)
 
@@ -25,7 +28,7 @@ print(signal.shape)
 start=time.time()
 spectrogram, _ = mel_spectogram(
     audio=signal.squeeze(),
-    sample_rate=16000,
+    sample_rate=22050,
     hop_length=256,
     win_length=1024,
     n_mels=80,
@@ -39,6 +42,8 @@ spectrogram, _ = mel_spectogram(
     mel_scale="slaney",
     compression=True
 )
+torch.save(spectrogram, 'my_vc.pt')
+#
 stop = time.time()
 print('time:', stop-start)
 # Convert the spectrogram to waveform
@@ -50,6 +55,8 @@ print('time:', stop-start)
 # Save the reconstructed audio as a waveform
 print(waveforms.shape)
 
-torchaudio.save('waveform_reconstructed.wav', waveforms.squeeze(1), 16000)
+# Save the reconstructed audio as a waveform
+torchaudio.save('waveform_reconstructed.wav', waveforms.squeeze(1), 22050)
+
 
 # If everything is set up correctly, the original and reconstructed audio should be nearly indistinguishable
