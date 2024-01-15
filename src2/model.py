@@ -425,12 +425,12 @@ if __name__ == "__main__":
     x=VoiceConversionModel(device)
     x = x.to(device)
     # Wczytaj state_dict z pliku
-    state_dict = torch.load("..//best_model.pth")
+    #state_dict = torch.load("..//best_model.pth")
 
     # Usuń klucze związane z vocoderem
-    state_dict = {k: v for k, v in state_dict.items() if not k.startswith('vocoder')} 
+    #state_dict = {k: v for k, v in state_dict.items() if not k.startswith('vocoder') and not k.startswith('discriminator')} 
     #print(state_dict.keys())
     # Wczytaj state_dict do modelu
-    x.load_state_dict(state_dict, strict=False)
+    #x.load_state_dict(state_dict, strict=False)
     #x.run_model()
-    x.train_model(epochs=50, patience=5, starting_epoch=2, batch_size = 2)
+    x.train_model(epochs=50, patience=5, starting_epoch=1, batch_size = 2)
