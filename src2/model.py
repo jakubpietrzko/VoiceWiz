@@ -8,7 +8,7 @@ from AudioDataset import AudioDataset
 from spk_emb import SpeakerEmbedder
 from discriminator import Discriminator
 from genz import Generator
-import nemo.collections.asr as nemo_asr
+#import nemo.collections.asr as nemo_asr
 import os
 import random
 from speechbrain.lobes.models.FastSpeech2 import mel_spectogram
@@ -26,9 +26,9 @@ class VoiceConversionModel(nn.Module):
         self.nvidiapred = nvidia_embedder.from_pretrained("nvidia/speakerverification_en_titanet_large")
         self.nvidiapred.eval()
         self.nvidiapred = self.nvidiapred.to(device)
-        self.asr_encoder = nemo_asr.models.EncDecCTCModelBPE.from_pretrained(model_name="stt_en_squeezeformer_ctc_small_ls")
+        """self.asr_encoder = nemo_asr.models.EncDecCTCModelBPE.from_pretrained(model_name="stt_en_squeezeformer_ctc_small_ls")
         self.asr_encoder = self.asr_encoder.to(device)
-        self.asr_encoder = self.asr_encoder.eval()
+        self.asr_encoder = self.asr_encoder.eval()"""
         self.speaker_embedder = SpeakerEmbedder().to(device)
         self.generator = Generator(speaker_embedding_dim=1).to(device)
         self.discriminator = Discriminator().to(device)
@@ -41,8 +41,8 @@ class VoiceConversionModel(nn.Module):
             param.requires_grad = False
         self.bce_loss = nn.BCELoss()
             # Zamroź parametry ASR
-        for param in self.asr_encoder.parameters():
-            param.requires_grad = False
+        """for param in self.asr_encoder.parameters():
+            param.requires_grad = False"""
         for param in self.nvidiapred.parameters():
             param.requires_grad = False 
         self.optimizer_speaker = torch.optim.Adam(self.speaker_embedder.parameters(), lr=0.001)
@@ -205,10 +205,10 @@ class VoiceConversionModel(nn.Module):
             w_asr = 0
             w_rec = 45
             
-        if ep>=5:
+        """if  ep>=5:
             w_pred = 20
             w_asr = 0.1
-            loss_asr = self.LAsr(source, gen_output, goal_len)
+            loss_asr = self.LAsr(source, gen_output, goal_len)"""
         
         gen_output = gen_output.squeeze(1)
      
@@ -240,7 +240,7 @@ class VoiceConversionModel(nn.Module):
         print("loss_disc real", loss_disc1)
         print("loss_disc fake", loss_disc2)
         #print("loss_disc goal", loss_disc3)
-        if ep >=5:
+        if False and ep >=5:
             print("01loss_asr", w_asr*loss_asr)
             loss_gen = w_rec*loss_rec + w_gen*loss_adv_p  + loss_pred +w_asr*loss_asr
         else:
@@ -425,12 +425,12 @@ if __name__ == "__main__":
     x=VoiceConversionModel(device)
     x = x.to(device)
     # Wczytaj state_dict z pliku
-    #state_dict = torch.load("..//best_model.pth")
+    state_dict = torch.load("..//best_model.pth")
 
     # Usuń klucze związane z vocoderem
-    #state_dict = {k: v for k, v in state_dict.items() if not k.startswith('vocoder') and not k.startswith('discriminator')} 
+    state_dict = {k: v for k, v in state_dict.items() if not k.startswith('vocoder') and not k.startswith('discriminator')} 
     #print(state_dict.keys())
     # Wczytaj state_dict do modelu
-    #x.load_state_dict(state_dict, strict=False)
+    x.load_state_dict(state_dict, strict=False)
     #x.run_model()
-    x.train_model(epochs=50, patience=5, starting_epoch=1, batch_size = 2)
+    x.train_model(epochs=50, patience=5, starting_epoch=2, batch_size = 2)

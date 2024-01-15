@@ -33,7 +33,10 @@ class Generator(nn.Module):
             nn.BatchNorm2d(64),
             
         )
-
+        """self.fc_speaker2 = nn.Sequential(
+            nn.Conv2d(64, 64, kernel_size=5 , stride=2, padding=2),
+            nn.BatchNorm2d(64),
+        )"""#mozna w lattenspace dokleic jedno wjescie z speaker embeddera ,a le trzeba dotosowac 
         self.conv0 = nn.Sequential(
             nn.Conv2d(1, 16, kernel_size=(5, 5), stride=(2, 2), padding=(2, 2)),
             nn.BatchNorm2d(16),
