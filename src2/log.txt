@@ -1,5 +1,0 @@
-Epoka: 1, œrednia strata: 27.42151992432128
-Zapisano model z epoki: 1, srednia strata: 27.42151992432128
-Epoka: 1, œrednia strata: 27.98973375193278
-Zapisano model z epoki: 2, srednia strata: 27.98973375193278
-Epoka: 2, œrednia strata: 38.94338390604655

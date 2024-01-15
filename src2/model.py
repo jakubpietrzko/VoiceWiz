@@ -47,7 +47,7 @@ class VoiceConversionModel(nn.Module):
             param.requires_grad = False 
         self.optimizer_speaker = torch.optim.Adam(self.speaker_embedder.parameters(), lr=0.001)
         self.optimizer_gen = torch.optim.Adam(self.generator.parameters(), lr=0.001)
-        self.optimizer_disc = torch.optim.Adam(self.discriminator.parameters(), lr=0.0002)
+        self.optimizer_disc = torch.optim.Adam(self.discriminator.parameters(), lr=0.0001)
         
     def forward(self, y):
         # Przejdź do przodu przez speaker_embedder, asr_encoder i f0_encoder
@@ -105,7 +105,7 @@ class VoiceConversionModel(nn.Module):
         similarity_score = (similarity_score + 1) / 2
         # Decision
         similarity_score = similarity_score.mean()
-        return similarity_score*w
+        return w / (1 + torch.exp(-8*(similarity_score-0.7)))
         """if torch.isnan(result).any() == True or  torch.isinf(result).any() == True:
             print("result nan")
             return w*1.3
@@ -195,10 +195,10 @@ class VoiceConversionModel(nn.Module):
         #loss_disc3=self.bce_loss(disc_output_goal, real_labels)
         loss_disc = loss_disc1 + loss_disc2 #+ loss_disc3
         #loss_disc = self.LAdvD(disc_output_fake,disc_output_real)
-        w_pred = 0.1
+        w_pred = 10
         w_asr = 0
         w_rec = 45
-        w_gen = 0.1
+        w_gen = 1
         if ep > 1:
             w_gen = 1
             w_pred = 20
@@ -252,29 +252,30 @@ class VoiceConversionModel(nn.Module):
         self.optimizer_gen.zero_grad()
         self.optimizer_disc.zero_grad()
         self.optimizer_speaker.zero_grad()
-
-        # Zamrożenie i trening dyskryminatora
-        for param in self.generator.parameters():
-            param.requires_grad = False
-        for param in self.speaker_embedder.parameters():
-            param.requires_grad = False
-        loss_disc.mean().backward()
-        self.optimizer_disc.step()
-
-        # Odmrożenie generatora i trening generatora
-        for param in self.generator.parameters():
-            param.requires_grad = True
-        for param in self.speaker_embedder.parameters():
-            param.requires_grad = True
+        if   cnt%4==0:
+            
+            # Zamrożenie i trening dyskryminatora
+            for param in self.generator.parameters():
+                param.requires_grad = False
+            for param in self.speaker_embedder.parameters():
+                param.requires_grad = False
+            loss_disc.mean().backward()
+            self.optimizer_disc.step()
+            print("discriminator")
+            # Odmrożenie generatora i trening generatora
+            for param in self.generator.parameters():
+                param.requires_grad = True
+            for param in self.speaker_embedder.parameters():
+                param.requires_grad = True
         for param in self.discriminator.parameters():
             param.requires_grad = False
         
         loss_gen.backward()
         self.optimizer_gen.step()
         self.optimizer_speaker.step()
-        for param in self.discriminator.parameters():
-            param.requires_grad = True
         
+        for param in self.discriminator.parameters():
+                param.requires_grad = True
         return loss_gen.mean()
 
     def evaluate_step(self, x, goal,cnt):
@@ -387,7 +388,7 @@ class VoiceConversionModel(nn.Module):
                 # Zapisz model, jeśli strata jest niższa
                 if avg_loss < best_loss:
                     best_loss = avg_loss
-                    torch.save(self.state_dict(), '..//best_model.pth')
+                    torch.save(self.state_dict(), '..//best_modelep2.pth')
                     f.write(f'Zapisano model z epoki: {epoch+1}, srednia strata: {avg_loss}\n')
                     no_improve_epochs = 0
                 else:
@@ -424,12 +425,12 @@ if __name__ == "__main__":
     x=VoiceConversionModel(device)
     x = x.to(device)
     # Wczytaj state_dict z pliku
-    #state_dict = torch.load("..//best_model_ep1.pth")
+    state_dict = torch.load("..//best_model.pth")
 
     # Usuń klucze związane z vocoderem
-    #state_dict = {k: v for k, v in state_dict.items() if not k.startswith('generator.vocoder')}
-
+    state_dict = {k: v for k, v in state_dict.items() if not k.startswith('vocoder')} 
+    #print(state_dict.keys())
     # Wczytaj state_dict do modelu
-    #x.load_state_dict(state_dict, strict=False)
+    x.load_state_dict(state_dict, strict=False)
     #x.run_model()
-    x.train_model(epochs=50, patience=5, starting_epoch=1, batch_size = 4)
+    x.train_model(epochs=50, patience=5, starting_epoch=2, batch_size = 2)
