@@ -4,7 +4,7 @@ import torchaudio
 import warnings
 from torch.utils.data import Dataset, DataLoader
 import random
-from AudioDataset import AudioDataset
+from AudioDatasetv2 import AudioDataset
 from spk_emb import SpeakerEmbedder
 from discriminator import Discriminator
 from genz import Generator
@@ -135,7 +135,7 @@ class VoiceConversionModel(nn.Module):
         kl_div = torch.distributions.kl_divergence(dist_pred, dist_zero)
         return kl_div.mean(dim=(2, 3))
        # return torch.distributions.kl_divergence(dist_pred, dist_zero).mean()
-    def train_step(self, source,mel, goal,source_len, goal_len,cnt, ep):
+    def train_step(self, source,mel, goal,source_len, goal_len, goal_mel,cnt, ep):
         source_len = source_len.squeeze(1)
         goal_len = goal_len.squeeze(1)
         
@@ -177,9 +177,9 @@ class VoiceConversionModel(nn.Module):
         #gen_output_mel = gen_output_mel.squeeze(1)
       
         # Oblicz gradienty
-        # Oblicz interpolacje między prawdziwymi a wygenerowanymi próbkami
-        alpha = torch.rand(mel.size(0), 1, 1, device=mel.device)
-        interpolates = alpha * mel + ((1 - alpha) * gen_output_mel.detach())
+      
+        alpha = torch.rand(goal_mel.size(0), 1, 1, device=goal_mel.device)
+        interpolates = alpha * goal_mel + ((1 - alpha) * gen_output_mel.detach())
 
         # Oblicz wyjście dyskryminatora dla interpolacji
         interpolates.requires_grad_(True)
@@ -199,7 +199,7 @@ class VoiceConversionModel(nn.Module):
 
         # Oblicz wyjście dyskryminatora dla wygenerowanych próbek
         disc_output_fake = self.discriminator(gen_output_mel.detach())
-        disc_output_real = self.discriminator(mel)
+        disc_output_real = self.discriminator(goal_mel)
         # Utwórz etykiety dla prawdziwych i wygenerowanych próbek
         real_labels = torch.full_like(disc_output_real, 0.9)
         fake_labels = torch.full_like(disc_output_fake, 0.1)
@@ -220,7 +220,7 @@ class VoiceConversionModel(nn.Module):
         w_gen = 1
         if ep > 1:
             w_gen = 1
-            w_pred = 40
+            w_pred = 80
             w_asr = 0
             w_rec = 45
             
@@ -382,17 +382,17 @@ class VoiceConversionModel(nn.Module):
             dataloader = DataLoader(data, batch_size=batch_size_on, shuffle=True)
             start = time.time()
             for batch in dataloader:
-                source, mel, goal, source_len, goal_len = batch
+                source, mel, goal, source_len, goal_len, goal_mel = batch
                 
                 source=source.to(self.device)
                 mel=mel.to(self.device)
                 goal=goal.to(self.device)
                 source_len=source_len.to(self.device)
                 goal_len=goal_len.to(self.device)
-                
+                goal_mel=goal_mel.to(self.device)
                 cnt+=1
                 # Trening na danych treningowych
-                loss  = self.train_step(source,mel,goal,source_len,goal_len,cnt, epoch)
+                loss  = self.train_step(source,mel,goal,source_len,goal_len, goal_mel,cnt, epoch)
                 stop = time.time()
                 
                 print()
@@ -408,7 +408,7 @@ class VoiceConversionModel(nn.Module):
                 # Zapisz model, jeśli strata jest niższa
                 if avg_loss < best_loss:
                     best_loss = avg_loss
-                    torch.save(self.state_dict(), '..//best_modelebeztanh.pth')
+                    torch.save(self.state_dict(), '..//best_model_any_onev2.pth')
                     f.write(f'Zapisano model z epoki: {epoch}, srednia strata: {avg_loss}\n')
                     no_improve_epochs = 0
                 else:
@@ -445,12 +445,12 @@ if __name__ == "__main__":
     x=VoiceConversionModel(device)
     x = x.to(device)
     # Wczytaj state_dict z pliku
-    #state_dict = torch.load("..//best_modelep2.pth")
+    state_dict = torch.load("..//best_model_any_one.pth")
 
     # Usuń klucze związane z vocoderem
-    #state_dict = {k: v for k, v in state_dict.items() if not k.startswith('vocoder') and not k.startswith('discriminator') } #
+    state_dict = {k: v for k, v in state_dict.items() if not k.startswith('vocoder') } #
     #print(state_dict.keys())
     # Wczytaj state_dict do modelu
-    #x.load_state_dict(state_dict, strict=False)
+    x.load_state_dict(state_dict, strict=False)
     #x.run_model()
     x.train_model(epochs=50, patience=5, starting_epoch=3, batch_size = 2)

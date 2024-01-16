@@ -1,2 +1,12 @@
-Epoka: 2, œrednia strata: 43.7164524230957
-Zapisano model z epoki: 3, srednia strata: 43.7164524230957
+Epoka: 3, œrednia strata: 49.538856857299805
+Zapisano model z epoki: 3, srednia strata: 49.538856857299805
+Epoka: 4, œrednia strata: 48.99782581329346
+Zapisano model z epoki: 4, srednia strata: 48.99782581329346
+Epoka: 3, œrednia strata: 45.87783511827752
+Zapisano model z epoki: 3, srednia strata: 45.87783511827752
+Epoka: 4, œrednia strata: 37.097171792728766
+Zapisano model z epoki: 4, srednia strata: 37.097171792728766
+Epoka: 5, œrednia strata: 34.271667294838714
+Zapisano model z epoki: 5, srednia strata: 34.271667294838714
+Epoka: 6, œrednia strata: 33.39228631922219
+Zapisano model z epoki: 6, srednia strata: 33.39228631922219

@@ -115,7 +115,7 @@ class Generator(nn.Module):
         x = F.leaky_relu(self.deconv3(x))
         x = F.leaky_relu(self.deconv2(x))
         x= F.leaky_relu(self.deconv1(x))
-        modified_mel = torch.tanh(self.deconv0(x))
+        modified_mel = self.deconv0(x)
         #print(modified_mel.shape)
         modified_mel = modified_mel*x_std  + x_mean
         modified_mel = modified_mel.squeeze(1)

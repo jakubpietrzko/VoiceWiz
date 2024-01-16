@@ -27,16 +27,6 @@ class Generator(nn.Module):
     def __init__(self, speaker_embedding_dim):
         super(Generator, self).__init__()
         # Warstwa osadzająca mówcę
-        self.fc_speaker1 = nn.Sequential(
-            
-            nn.Conv2d(speaker_embedding_dim, 64, kernel_size=5 , stride=2, padding=2),
-            nn.BatchNorm2d(64),
-            
-        )
-        """self.fc_speaker2 = nn.Sequential(
-            nn.Conv2d(64, 64, kernel_size=5 , stride=2, padding=2),
-            nn.BatchNorm2d(64),
-        )"""#mozna w lattenspace dokleic jedno wjescie z speaker embeddera ,a le trzeba dotosowac 
         self.conv0 = nn.Sequential(
             nn.Conv2d(1, 16, kernel_size=(5, 5), stride=(2, 2), padding=(2, 2)),
             nn.BatchNorm2d(16),
@@ -76,7 +66,7 @@ class Generator(nn.Module):
         #self.res_blocks1 = nn.ModuleList([ResidualBlock(160, 160, kernel_size=3, stride=1, padding=1) for i in range(2)])
         # Oryginalny vokoder
         
-        self.fc1 = nn.Linear(8000, 4024)
+        self.fc1 = nn.Linear(12000, 4024)
         self.fc2 = nn.Linear(4024, 4024)
         self.fc3 = nn.Linear(4024, 8000)
     def forward(self, x, speaker_embedding,ep,cnt):
@@ -91,7 +81,7 @@ class Generator(nn.Module):
         xs = (xs - x_mean) / x_std
         # Przetwarzanie melspektrogramu
 
-        xs=xs+speaker_embedding
+        xs=xs
         x = F.leaky_relu(self.conv0(xs))
         x = F.leaky_relu(self.conv1(x))
     
@@ -105,6 +95,7 @@ class Generator(nn.Module):
             #x = res_block(x)
         #print(x.shape)
         x = x.view(x.size(0), -1)
+        x= torch.cat((x, speaker_embedding))
         x = F.leaky_relu(self.fc1(x))
         x = F.leaky_relu(self.fc2(x))
         x = F.leaky_relu(self.fc3(x))
@@ -114,7 +105,7 @@ class Generator(nn.Module):
         x = F.leaky_relu(self.deconv2(x))
 
         x= F.leaky_relu(self.deconv1(x))
-        modified_mel = torch.tanh(self.deconv0(x))
+        modified_mel = self.deconv0(x)
         #print(modified_mel.shape)
         modified_mel = modified_mel*x_std  + x_mean
         modified_mel = modified_mel.squeeze(1)
