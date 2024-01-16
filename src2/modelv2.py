@@ -5,9 +5,9 @@ import warnings
 from torch.utils.data import Dataset, DataLoader
 import random
 from AudioDatasetv2 import AudioDataset
-from spk_emb import SpeakerEmbedder
+from spk_embv3 import SpeakerEmbedder
 from discriminator import Discriminator
-from genz import Generator
+from genzv3 import Generator
 #import nemo.collections.asr as nemo_asr
 import os
 import random
@@ -408,7 +408,7 @@ class VoiceConversionModel(nn.Module):
                 # Zapisz model, jeśli strata jest niższa
                 if avg_loss < best_loss:
                     best_loss = avg_loss
-                    torch.save(self.state_dict(), '..//best_model_any_onev2.pth')
+                    torch.save(self.state_dict(), '..//best_model_any_onev3.pth')
                     f.write(f'Zapisano model z epoki: {epoch}, srednia strata: {avg_loss}\n')
                     no_improve_epochs = 0
                 else:
@@ -445,12 +445,12 @@ if __name__ == "__main__":
     x=VoiceConversionModel(device)
     x = x.to(device)
     # Wczytaj state_dict z pliku
-    state_dict = torch.load("..//best_model_any_one.pth")
+    #state_dict = torch.load("..//best_model_any_one.pth")
 
     # Usuń klucze związane z vocoderem
-    state_dict = {k: v for k, v in state_dict.items() if not k.startswith('vocoder') } #
+    #state_dict = {k: v for k, v in state_dict.items() if not k.startswith('vocoder') } #
     #print(state_dict.keys())
     # Wczytaj state_dict do modelu
-    x.load_state_dict(state_dict, strict=False)
+    #x.load_state_dict(state_dict, strict=False)
     #x.run_model()
     x.train_model(epochs=50, patience=5, starting_epoch=3, batch_size = 2)

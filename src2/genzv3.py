@@ -66,11 +66,11 @@ class Generator(nn.Module):
         #self.res_blocks1 = nn.ModuleList([ResidualBlock(160, 160, kernel_size=3, stride=1, padding=1) for i in range(2)])
         # Oryginalny vokoder
         
-        self.fc1 = nn.Linear(12000, 4024)
-        self.fc2 = nn.Linear(4024, 4024)
-        self.fc3 = nn.Linear(4024, 8000)
+        self.fc1 = nn.Linear(16000, 8024)
+        self.fc2 = nn.Linear(8024, 8024)
+        self.fc3 = nn.Linear(8024, 8000)
     def forward(self, x, speaker_embedding,ep,cnt):
-        speaker_embedding = speaker_embedding.unsqueeze(1)
+        #speaker_embedding = speaker_embedding.unsqueeze(1)
         #speaker_embedding1 = self.fc_speaker1(speaker_embedding)
         xs= x.unsqueeze(1)
         x_std=xs.std()
@@ -95,7 +95,9 @@ class Generator(nn.Module):
             #x = res_block(x)
         #print(x.shape)
         x = x.view(x.size(0), -1)
-        x= torch.cat((x, speaker_embedding))
+        print(x.shape)
+        print(speaker_embedding.shape)
+        x= torch.cat((x, speaker_embedding),dim=1)
         x = F.leaky_relu(self.fc1(x))
         x = F.leaky_relu(self.fc2(x))
         x = F.leaky_relu(self.fc3(x))
